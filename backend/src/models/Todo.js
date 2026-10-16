@@ -8,6 +8,7 @@ const todoSchema = new mongoose.Schema(
       required: true,
       index: true
     },
+    classId: { type: mongoose.Schema.Types.ObjectId, ref: "Class", default: null, index: true },
     title: { type: String, required: true, trim: true, maxlength: 120 },
     description: { type: String, trim: true, maxlength: 2000, default: "" },
     priority: {
@@ -23,11 +24,18 @@ const todoSchema = new mongoose.Schema(
       default: "pending",
       required: true
     },
+    visibility: {
+      type: String,
+      enum: ["private", "classmates", "public"],
+      default: "private",
+      required: true
+    },
     completionNote: { type: String, trim: true, maxlength: 1000, default: "" }
   },
   { timestamps: true }
 );
 
 todoSchema.index({ userId: 1, dueDate: 1 });
+todoSchema.index({ classId: 1, visibility: 1, dueDate: 1 });
 
 export default mongoose.model("Todo", todoSchema);

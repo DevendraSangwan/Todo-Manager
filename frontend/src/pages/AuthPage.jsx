@@ -31,7 +31,7 @@ export default function AuthPage({ mode }) {
         body: JSON.stringify({ email, password })
       });
       setUser(user);
-      navigate("/dashboard", { replace: true });
+      navigate(user.role === "SUPER_ADMIN" ? "/admin" : user.role === "TEACHER_ADMIN" ? "/teacher" : user.setupComplete ? "/dashboard" : "/onboarding", { replace: true });
     } catch (requestError) {
       setError(requestError.message);
     } finally {

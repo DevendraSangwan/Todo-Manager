@@ -3,7 +3,7 @@ import {
   ArrowDown, ArrowLeft, ArrowRight, Check, CheckCheck, Circle, ClipboardList,
   LogOut, Moon, Plus, Sun, Trash2
 } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext.jsx";
 import { api } from "../lib/api.js";
 
@@ -44,7 +44,8 @@ export default function Dashboard() {
     title: "",
     description: "",
     priority: "medium",
-    dueDate: localDateValue()
+    dueDate: localDateValue(),
+    visibility: "private"
   });
   const [completionDraft, setCompletionDraft] = useState(null);
 
@@ -101,7 +102,7 @@ export default function Dashboard() {
         method: "POST",
         body: JSON.stringify({ ...form, dueDate })
       });
-      setForm({ title: "", description: "", priority: "medium", dueDate: localDateValue() });
+      setForm({ title: "", description: "", priority: "medium", dueDate: localDateValue(), visibility: "private" });
       setTab("all");
       setPage(1);
     } catch (error) {
@@ -152,6 +153,13 @@ export default function Dashboard() {
           <span className="brand-mark small"><ClipboardList size={18} /></span>
           <span>daymark<span className="brand-period">.</span></span>
         </a>
+        <nav className="phase-nav dashboard-nav" aria-label="Main navigation">
+          {user?.role === "SUPER_ADMIN" && <Link to="/admin">Admin panel</Link>}
+          {user?.role === "TEACHER_ADMIN" && <Link to="/teacher">Teacher panel</Link>}
+          {user?.classId && user.role === "STUDENT" && <Link to="/classmates">Classmates’ todos</Link>}
+          {user?.role === "STUDENT" && <Link to="/friends">Friends</Link>}
+          {user?.role === "STUDENT" && <Link to="/notifications">Notifications</Link>}
+        </nav>
         <div className="topbar-actions">
           <button
             aria-label={`Switch to ${theme === "light" ? "dark" : "light"} mode`}
@@ -238,6 +246,12 @@ export default function Dashboard() {
                   <div>
                     <label htmlFor="todo-date">Due date</label>
                     <input id="todo-date" onChange={(event) => setForm((value) => ({ ...value, dueDate: event.target.value }))} required type="date" value={form.dueDate} />
+                  </div>
+                  <div>
+                    <label htmlFor="todo-visibility">Visibility</label>
+                    <select id="todo-visibility" onChange={(event) => setForm((value) => ({ ...value, visibility: event.target.value }))} value={form.visibility}>
+                      <option value="private">Private</option><option value="classmates">Classmates</option><option value="public">Public</option>
+                    </select>
                   </div>
                 </div>
                 <button className="primary-button form-submit" disabled={busy} type="submit">

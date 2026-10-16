@@ -3,6 +3,11 @@ import cookieParser from "cookie-parser";
 import cors from "cors";
 import authRoutes from "./routes/auth.js";
 import todoRoutes from "./routes/todos.js";
+import classRoutes from "./routes/classes.js";
+import adminRoutes from "./routes/admin.js";
+import requestRoutes from "./routes/requests.js";
+import notificationRoutes from "./routes/notifications.js";
+import friendRoutes from "./routes/friends.js";
 import { errorHandler, notFound } from "./middleware/errors.js";
 
 const app = express();
@@ -16,6 +21,11 @@ app.use(cookieParser());
 app.get("/api/health", (req, res) => res.json({ status: "ok" }));
 app.use("/api/auth", authRoutes);
 app.use("/api/todos", todoRoutes);
+app.use("/api/classes", classRoutes);
+app.use("/api/admin", adminRoutes);
+app.use("/api/requests", requestRoutes);
+app.use("/api/notifications", notificationRoutes);
+app.use("/api/friends", friendRoutes);
 app.use(notFound);
 app.use(errorHandler);
 
