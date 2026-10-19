@@ -31,7 +31,8 @@ router.get("/:friendId/todos", async (req, res, next) => {
     if (!friend) return res.status(404).json({ message: "Friend not found." });
     const filter = {
       userId: friend._id,
-      visibility: { $in: ["classmates", "public"] }
+      visibility: { $in: ["classmates", "public"] },
+      deletedAt: null
     };
     const [todos, total] = await Promise.all([
       Todo.find(filter).sort({ dueDate: 1, createdAt: -1 }).skip((page - 1) * limit).limit(limit).lean(),

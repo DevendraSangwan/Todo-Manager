@@ -21,6 +21,7 @@ let server;
 let baseUrl;
 let originalFindUser;
 let originalFindTodo;
+let originalAggregate;
 let token;
 
 before(async () => {
@@ -28,6 +29,7 @@ before(async () => {
   token = jwt.sign({ sub: studentId }, secret);
   originalFindUser = User.findById;
   originalFindTodo = Todo.findById;
+  originalAggregate = Todo.aggregate;
   User.findById = () => ({
     select: async () => ({
       id: studentId,
@@ -50,6 +52,7 @@ before(async () => {
 after(async () => {
   User.findById = originalFindUser;
   Todo.findById = originalFindTodo;
+  Todo.aggregate = originalAggregate;
   await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
 });
 
@@ -69,4 +72,39 @@ test("a student cannot edit another user's private todo", async () => {
   });
   assert.equal(response.status, 403);
   assert.deepEqual(await response.json(), { message: "You cannot edit this todo." });
+});
+
+test("daily report includes totals, completion percentage, and chart values", async () => {
+  Todo.aggregate = async () => [
+    { _id: "completed", count: 2 },
+    { _id: "pending", count: 1 }
+  ];
+  const response = await fetch(`${baseUrl}/api/todos/reports/daily?date=2026-10-16`, {
+    headers: { Cookie: `token=${token}` }
+  });
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), {
+    date: "2026-10-16",
+    total: 3,
+    completed: 2,
+    pending: 1,
+    completionPercentage: 67,
+    chart: [{ name: "Completed", count: 2 }, { name: "Pending", count: 1 }]
+  });
+  Todo.aggregate = originalAggregate;
+});
+
+test("todo filters reject legacy priority values", async () => {
+  const response = await fetch(`${baseUrl}/api/todos?priority=high`, {
+    headers: { Cookie: `token=${token}` }
+  });
+  assert.equal(response.status, 400);
+  assert.deepEqual(await response.json(), { message: "Priority is not valid." });
+});
+
+test("students cannot access the teacher audit trail", async () => {
+  const response = await fetch(`${baseUrl}/api/teacher-audit/mine`, {
+    headers: { Cookie: `token=${token}` }
+  });
+  assert.equal(response.status, 403);
 });

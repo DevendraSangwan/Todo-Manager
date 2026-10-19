@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  ArrowDown, ArrowLeft, ArrowRight, Check, CheckCheck, Circle, ClipboardList,
-  LogOut, Moon, Plus, Sun, Trash2
+  ArrowDown, ArrowLeft, ArrowRight, CalendarDays, Check, CheckCheck, Circle, ClipboardList,
+  History, LogOut, Moon, Plus, Search, Sun, Trash2
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext.jsx";
@@ -13,6 +13,18 @@ const tabs = [
   { id: "pending", label: "Pending", icon: Circle },
   { id: "completed", label: "Completed", icon: CheckCheck }
 ];
+const priorityOptions = [
+  ["urgent-important", "Urgent + Important"],
+  ["important-not-urgent", "Important, not Urgent"],
+  ["urgent-not-important", "Urgent, not Important"],
+  ["neither", "Neither"]
+];
+const priorityLabels = Object.fromEntries([
+  ...priorityOptions,
+  ["high", "Urgent + Important"],
+  ["medium", "Important, not Urgent"],
+  ["low", "Neither"]
+]);
 
 const localDateValue = (date = new Date()) => {
   const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
@@ -38,15 +50,24 @@ export default function Dashboard() {
   const [todos, setTodos] = useState([]);
   const [pagination, setPagination] = useState({ page: 1, pages: 0, total: 0 });
   const [selectedDate, setSelectedDate] = useState("");
+  const [search, setSearch] = useState("");
+  const [priorityFilter, setPriorityFilter] = useState("");
+  const [overdueOnly, setOverdueOnly] = useState(false);
+  const [savedFilters, setSavedFilters] = useState([]);
+  const [filterName, setFilterName] = useState("");
+  const [historyTodo, setHistoryTodo] = useState(null);
+  const [historyEntries, setHistoryEntries] = useState([]);
   const [loadError, setLoadError] = useState("");
   const [busy, setBusy] = useState(false);
   const [form, setForm] = useState({
     title: "",
     description: "",
-    priority: "medium",
+    priority: "important-not-urgent",
     dueDate: localDateValue(),
     visibility: "private"
   });
+  const [subtaskText, setSubtaskText] = useState("");
+  const [repeatFrequency, setRepeatFrequency] = useState("");
   const [completionDraft, setCompletionDraft] = useState(null);
 
   useEffect(() => {
@@ -59,6 +80,9 @@ export default function Dashboard() {
     const params = new URLSearchParams({ page: String(page), limit: "8" });
     if (tab === "pending" || tab === "completed") params.set("status", tab);
     if (selectedDate) params.set("date", selectedDate);
+    if (search.trim()) params.set("q", search.trim());
+    if (priorityFilter) params.set("priority", priorityFilter);
+    if (overdueOnly) params.set("overdue", "true");
     try {
       const result = await api(`/todos?${params}`);
       setTodos(result.todos);
@@ -70,11 +94,15 @@ export default function Dashboard() {
         navigate("/login", { replace: true });
       }
     }
-  }, [navigate, page, selectedDate, setUser, tab]);
+  }, [navigate, overdueOnly, page, priorityFilter, search, selectedDate, setUser, tab]);
 
   useEffect(() => {
     if (tab !== "add") loadTodos();
   }, [loadTodos, tab]);
+
+  useEffect(() => {
+    api("/todos/saved-filters").then((result) => setSavedFilters(result.filters)).catch((error) => setLoadError(error.message));
+  }, []);
 
   const groupedTodos = useMemo(() => {
     return todos.reduce((groups, todo) => {
@@ -100,9 +128,17 @@ export default function Dashboard() {
       const dueDate = new Date(`${form.dueDate}T12:00:00`).toISOString();
       await api("/todos", {
         method: "POST",
-        body: JSON.stringify({ ...form, dueDate })
+        body: JSON.stringify({
+          ...form,
+          dueDate,
+          priority: form.priority === "medium" ? "important-not-urgent" : form.priority,
+          subtasks: subtaskText.split("\n").map((title) => title.trim()).filter(Boolean).map((title) => ({ title })),
+          repeatFrequency: repeatFrequency || null
+        })
       });
-      setForm({ title: "", description: "", priority: "medium", dueDate: localDateValue(), visibility: "private" });
+      setForm({ title: "", description: "", priority: "important-not-urgent", dueDate: localDateValue(), visibility: "private" });
+      setSubtaskText("");
+      setRepeatFrequency("");
       setTab("all");
       setPage(1);
     } catch (error) {
@@ -123,13 +159,78 @@ export default function Dashboard() {
   }
 
   async function deleteTodo(todoId) {
-    if (!window.confirm("Delete this todo?")) return;
     try {
       await api(`/todos/${todoId}`, { method: "DELETE" });
       await loadTodos();
     } catch (error) {
       setLoadError(error.message);
     }
+  }
+
+  async function toggleSubtask(todo, subtaskId) {
+    await updateTodo(todo._id, {
+      subtasks: todo.subtasks.map((subtask) => ({
+        _id: subtask._id,
+        title: subtask.title,
+        completed: subtask._id === subtaskId ? !subtask.completed : subtask.completed
+      }))
+    });
+  }
+
+  async function showHistory(todoId) {
+    if (historyTodo === todoId) {
+      setHistoryTodo(null);
+      return;
+    }
+    try {
+      const result = await api(`/todos/history/${todoId}`);
+      setHistoryEntries(result.history);
+      setHistoryTodo(todoId);
+      setLoadError("");
+    } catch (error) {
+      setLoadError(error.message);
+    }
+  }
+
+  async function saveCurrentFilter(event) {
+    event.preventDefault();
+    try {
+      const { filter } = await api("/todos/saved-filters", {
+        method: "POST",
+        body: JSON.stringify({
+          name: filterName,
+          filters: {
+            search,
+            status: tab === "pending" || tab === "completed" ? tab : "all",
+            priority: priorityFilter,
+            date: selectedDate,
+            overdue: overdueOnly
+          }
+        })
+      });
+      setSavedFilters((current) => [...current, filter].sort((a, b) => a.name.localeCompare(b.name)));
+      setFilterName("");
+      setLoadError("");
+    } catch (error) {
+      setLoadError(error.message);
+    }
+  }
+
+  function applySavedFilter(filter) {
+    setSearch(filter.filters.search);
+    setPriorityFilter(filter.filters.priority);
+    setSelectedDate(filter.filters.date ?? "");
+    setOverdueOnly(filter.filters.overdue);
+    setTab(filter.filters.status === "all" ? "all" : filter.filters.status);
+    setPage(1);
+  }
+
+  function applyOverdueHighPriority() {
+    setTab("pending");
+    setSelectedDate("");
+    setPriorityFilter("urgent-important");
+    setOverdueOnly(true);
+    setPage(1);
   }
 
   async function logout() {
@@ -154,8 +255,13 @@ export default function Dashboard() {
           <span>daymark<span className="brand-period">.</span></span>
         </a>
         <nav className="phase-nav dashboard-nav" aria-label="Main navigation">
+          <Link to="/calendar"><CalendarDays size={14} />Calendar</Link>
+          <Link to="/matrix">Matrix</Link>
+          <Link to="/reports">Reports</Link>
+          <Link to="/trash">Trash</Link>
           {user?.role === "SUPER_ADMIN" && <Link to="/admin">Admin panel</Link>}
           {user?.role === "TEACHER_ADMIN" && <Link to="/teacher">Teacher panel</Link>}
+          {user?.role === "TEACHER_ADMIN" && <Link to="/teacher/audit">Audit log</Link>}
           {user?.classId && user.role === "STUDENT" && <Link to="/classmates">Classmates’ todos</Link>}
           {user?.role === "STUDENT" && <Link to="/friends">Friends</Link>}
           {user?.role === "STUDENT" && <Link to="/notifications">Notifications</Link>}
@@ -240,7 +346,7 @@ export default function Dashboard() {
                   <div>
                     <label htmlFor="todo-priority">Priority</label>
                     <select id="todo-priority" onChange={(event) => setForm((value) => ({ ...value, priority: event.target.value }))} value={form.priority}>
-                      <option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option>
+                      {priorityOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                     </select>
                   </div>
                   <div>
@@ -254,6 +360,12 @@ export default function Dashboard() {
                     </select>
                   </div>
                 </div>
+                <label htmlFor="todo-subtasks">Checklist <span className="optional">(one sub-task per line)</span></label>
+                <textarea id="todo-subtasks" maxLength={3900} onChange={(event) => setSubtaskText(event.target.value)} placeholder={"Read chapter 1\nTake notes"} value={subtaskText} />
+                <label htmlFor="todo-repeat">Repeat</label>
+                <select id="todo-repeat" onChange={(event) => setRepeatFrequency(event.target.value)} value={repeatFrequency}>
+                  <option value="">Does not repeat</option><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="monthly">Monthly</option>
+                </select>
                 <button className="primary-button form-submit" disabled={busy} type="submit">
                   <Plus size={17} />{busy ? "Adding…" : "Add todo"}
                 </button>
@@ -266,6 +378,24 @@ export default function Dashboard() {
                     <input id="date-filter" onChange={(event) => { setSelectedDate(event.target.value); setPage(1); }} type="date" value={selectedDate} />
                   </label>
                   {selectedDate && <button className="clear-filter" onClick={() => { setSelectedDate(""); setPage(1); }} type="button">Clear date</button>}
+                </div>
+                <div className="smart-filters">
+                  <label className="search-field"><Search size={16} /><input aria-label="Search todos" onChange={(event) => { setSearch(event.target.value); setPage(1); }} placeholder="Search titles and notes" value={search} /></label>
+                  <select aria-label="Filter by priority" onChange={(event) => { setPriorityFilter(event.target.value); setPage(1); }} value={priorityFilter}>
+                    <option value="">All priorities</option>{priorityOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                  </select>
+                  <label className="overdue-filter"><input checked={overdueOnly} onChange={(event) => { setOverdueOnly(event.target.checked); setPage(1); }} type="checkbox" /> Overdue</label>
+                  <button className="secondary-button compact-button" onClick={applyOverdueHighPriority} type="button">Overdue high-priority</button>
+                  <select aria-label="Saved filters" defaultValue="" onChange={(event) => {
+                    const filter = savedFilters.find((item) => item._id === event.target.value);
+                    if (filter) applySavedFilter(filter);
+                  }}>
+                    <option value="">Saved filters</option>{savedFilters.map((filter) => <option key={filter._id} value={filter._id}>{filter.name}</option>)}
+                  </select>
+                  <form className="save-filter-form" onSubmit={saveCurrentFilter}>
+                    <input aria-label="Saved filter name" maxLength={60} onChange={(event) => setFilterName(event.target.value)} placeholder="Name this filter" required value={filterName} />
+                    <button className="text-button" type="submit">Save filter</button>
+                  </form>
                 </div>
                 {todos.length ? (
                   <div className="todo-groups">
@@ -288,10 +418,22 @@ export default function Dashboard() {
                               <div className="todo-main">
                                 <div className="todo-title-row">
                                   <h4>{todo.title}</h4>
-                                  <span className={`priority-badge priority-${todo.priority}`}>{todo.priority}</span>
+                                  <span className={`priority-badge priority-${todo.priority}`}>{priorityLabels[todo.priority] ?? todo.priority}</span>
                                 </div>
                                 {todo.description && <p className="todo-description">{todo.description}</p>}
+                                {todo.repeatFrequency && <p className="todo-description">Repeats {todo.repeatFrequency}</p>}
+                                {todo.subtasks?.length > 0 && <ul className="subtask-list">{todo.subtasks.map((subtask) => (
+                                  <li key={subtask._id}>
+                                    <label><input checked={subtask.completed} onChange={() => toggleSubtask(todo, subtask._id)} type="checkbox" /> <span className={subtask.completed ? "subtask-complete" : ""}>{subtask.title}</span></label>
+                                  </li>
+                                ))}</ul>}
                                 {todo.completionNote && <p className="completion-note">Note: {todo.completionNote}</p>}
+                                <button className="text-button history-button" onClick={() => showHistory(todo._id)} type="button"><History size={13} />{historyTodo === todo._id ? "Hide history" : "History"}</button>
+                                {historyTodo === todo._id && <div className="history-list">
+                                  {historyEntries.map((entry) => <div key={entry._id}><strong>{entry.action}</strong> · {new Date(entry.createdAt).toLocaleString()}
+                                    {entry.changes.map((change, index) => <span key={`${change.field}-${index}`}>{change.field}: {String(change.oldValue ?? "—")} → {String(change.newValue ?? "—")}</span>)}
+                                  </div>)}
+                                </div>}
                                 {completionDraft === todo._id && (
                                   <form className="completion-form" onSubmit={(event) => {
                                     event.preventDefault();
@@ -304,7 +446,7 @@ export default function Dashboard() {
                                   </form>
                                 )}
                               </div>
-                              <button aria-label={`Delete ${todo.title}`} className="delete-button" onClick={() => deleteTodo(todo._id)} type="button">
+                              <button aria-label={`Move ${todo.title} to trash`} className="delete-button" onClick={() => deleteTodo(todo._id)} type="button">
                                 <Trash2 size={16} />
                               </button>
                             </article>

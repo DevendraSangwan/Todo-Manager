@@ -13,10 +13,24 @@ const todoSchema = new mongoose.Schema(
     description: { type: String, trim: true, maxlength: 2000, default: "" },
     priority: {
       type: String,
-      enum: ["low", "medium", "high"],
-      default: "medium",
+      enum: [
+        "urgent-important", "important-not-urgent",
+        "urgent-not-important", "neither",
+        "low", "medium", "high"
+      ],
+      default: "important-not-urgent",
       required: true
     },
+    subtasks: [{
+      title: { type: String, trim: true, required: true, maxlength: 120 },
+      completed: { type: Boolean, default: false }
+    }],
+    repeatFrequency: {
+      type: String,
+      enum: ["daily", "weekly", "monthly", null],
+      default: null
+    },
+    nextOccurrenceCreated: { type: Boolean, default: false },
     dueDate: { type: Date, required: true, index: true },
     status: {
       type: String,
@@ -30,12 +44,15 @@ const todoSchema = new mongoose.Schema(
       default: "private",
       required: true
     },
-    completionNote: { type: String, trim: true, maxlength: 1000, default: "" }
+    completionNote: { type: String, trim: true, maxlength: 1000, default: "" },
+    deletedAt: { type: Date, default: null, index: true },
+    deletedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null }
   },
   { timestamps: true }
 );
 
 todoSchema.index({ userId: 1, dueDate: 1 });
 todoSchema.index({ classId: 1, visibility: 1, dueDate: 1 });
+todoSchema.index({ userId: 1, deletedAt: 1, dueDate: 1 });
 
 export default mongoose.model("Todo", todoSchema);

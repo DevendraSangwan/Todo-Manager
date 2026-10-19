@@ -2,6 +2,9 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import AuthPage from "./pages/AuthPage.jsx";
 import Dashboard from "./pages/Dashboard.jsx";
 import {
+  CalendarPage, DailyReportPage, PriorityMatrixPage, TeacherAuditPage, TrashPage
+} from "./pages/Phase3Pages.jsx";
+import {
   AdminPage, ClassmatesPage, FriendsPage, NotificationsPage, OnboardingPage, TeacherPage
 } from "./pages/Phase2Pages.jsx";
 import { useAuth } from "./context/AuthContext.jsx";
@@ -42,6 +45,11 @@ export default function App() {
         path="/dashboard"
         element={<ProtectedRoute roles={["STUDENT"]}><Dashboard /></ProtectedRoute>}
       />
+      <Route path="/calendar" element={<ProtectedRoute><CalendarPage /></ProtectedRoute>} />
+      <Route path="/matrix" element={<ProtectedRoute><PriorityMatrixPage /></ProtectedRoute>} />
+      <Route path="/reports" element={<ProtectedRoute><DailyReportPage /></ProtectedRoute>} />
+      <Route path="/trash" element={<ProtectedRoute><TrashPage /></ProtectedRoute>} />
+      <Route path="/teacher/audit" element={<ProtectedRoute roles={["TEACHER_ADMIN"]}><TeacherAuditPage /></ProtectedRoute>} />
       <Route path="/onboarding" element={<ProtectedRoute allowSetup><OnboardingPage /></ProtectedRoute>} />
       <Route path="/admin" element={<ProtectedRoute roles={["SUPER_ADMIN"]}><AdminPage /></ProtectedRoute>} />
       <Route path="/teacher" element={<ProtectedRoute roles={["TEACHER_ADMIN"]}><TeacherPage /></ProtectedRoute>} />

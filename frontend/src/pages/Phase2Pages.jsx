@@ -24,8 +24,12 @@ function PageShell({ title, children }) {
         <Link className="topbar-brand" to="/dashboard"><span className="brand-mark small">D</span><span>daymark<span className="brand-period">.</span></span></Link>
         <nav className="phase-nav" aria-label="Main navigation">
           <Link to="/dashboard">Todos</Link>
+          <Link to="/calendar">Calendar</Link>
+          <Link to="/matrix">Matrix</Link>
+          <Link to="/reports">Reports</Link>
+          <Link to="/trash">Trash</Link>
           {user?.role === "SUPER_ADMIN" && <Link to="/admin">Admin</Link>}
-          {user?.role === "TEACHER_ADMIN" && <Link to="/teacher">Teacher</Link>}
+          {user?.role === "TEACHER_ADMIN" && <><Link to="/teacher">Teacher</Link><Link to="/teacher/audit">Audit log</Link></>}
           {user?.classId && user.role === "STUDENT" && <Link to="/classmates">Classmates</Link>}
           <Link to="/friends">Friends</Link>
           <Link to="/notifications">Notifications</Link>
@@ -332,7 +336,12 @@ export function TeacherPage() {
             <input aria-label="Todo description" defaultValue={todo.description} name="description" />
             <input aria-label="Todo due date" defaultValue={new Date(todo.dueDate).toISOString().slice(0, 10)} name="dueDate" type="date" required />
             <select aria-label="Todo status" defaultValue={todo.status} name="status"><option value="pending">Pending</option><option value="completed">Completed</option></select>
-            <select aria-label="Todo priority" defaultValue={todo.priority} name="priority"><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option></select>
+            <select aria-label="Todo priority" defaultValue={({ high: "urgent-important", medium: "important-not-urgent", low: "neither" }[todo.priority] ?? todo.priority)} name="priority">
+              <option value="urgent-important">Urgent + Important</option>
+              <option value="important-not-urgent">Important, not Urgent</option>
+              <option value="urgent-not-important">Urgent, not Important</option>
+              <option value="neither">Neither</option>
+            </select>
             <select aria-label="Todo visibility" defaultValue={todo.visibility} name="visibility"><option value="private">Private</option><option value="classmates">Classmates</option><option value="public">Public</option></select>
             <button className="text-button" type="submit">Save changes</button>
           </form>

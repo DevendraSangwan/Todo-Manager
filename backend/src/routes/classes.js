@@ -74,6 +74,7 @@ router.get("/mine/students/:studentId/todos", requireRole("TEACHER_ADMIN"), asyn
       return res.status(400).json({ message: "Page must be positive and limit must be between 1 and 50." });
     }
     const filter = { userId: student._id, classId: classroom._id };
+    filter.deletedAt = null;
     const [todos, total] = await Promise.all([
       Todo.find(filter).sort({ dueDate: 1, createdAt: -1 }).skip((page - 1) * limit).limit(limit).lean(),
       Todo.countDocuments(filter)
@@ -105,7 +106,8 @@ router.get("/students", async (req, res, next) => {
     const filter = {
       userId: { $in: studentIds },
       classId: req.user.classId,
-      visibility: { $in: ["classmates", "public"] }
+      visibility: { $in: ["classmates", "public"] },
+      deletedAt: null
     };
     const [todos, total] = await Promise.all([
       Todo.find(filter).populate("userId", "_id email").sort({ dueDate: 1, createdAt: -1 })

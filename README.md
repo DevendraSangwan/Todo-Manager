@@ -1,6 +1,6 @@
 # Student Todo App — Step 1
 
-A small MERN todo app with email/password registration, cookie-based JWT login, private todos, date-grouped lists, pagination, completion notes, and a persistent light/dark theme.
+A MERN todo app with email/password registration, cookie-based JWT login, private todos, date-grouped lists, pagination, completion notes, a priority matrix, calendar, daily reports, recurring todos, and a persistent light/dark theme.
 
 ## Requirements
 
@@ -63,4 +63,17 @@ List APIs accept `page`, `limit`, optional `status`, and optional `date=YYYY-MM-
 - Todos default to `private`; `classmates` and `public` todos are the only todos returned on the classmates page. Approved friend access is read-only and does not disclose private todos.
 - Students and friends can send access requests, and messages are limited to classmates and approved friends. The notifications page separates requests from answers.
 - Run the backend authorization tests with `cd backend && npm test`. They exercise the API and assert that another student receives HTTP 403 when reading or editing a private todo.
+
+## Phase 3
+
+- The dashboard supports title/notes search, status/date/priority filters, named saved filters, and an **Overdue high-priority** quick filter.
+- Todo priority uses four matrix quadrants: **Urgent + Important**, **Important, not Urgent**, **Urgent, not Important**, and **Neither**. Existing `high`/`medium`/`low` records are shown as urgent+important / important-not-urgent / neither until they are changed.
+- **Calendar** shows a monthly view with a dot on dates containing todos. Selecting a date lists its todos and supports adding or editing a todo, including its due date.
+- **Matrix** displays active todos in their four priority quadrants. **Reports** shows a chosen date's total, completed, pending, completion percentage, and a Recharts bar chart.
+- Todos can include a checklist and repeat daily, weekly, or monthly. Completing a recurring todo creates the next occurrence; monthly recurrences clamp to the last valid day of a shorter month.
+- Deleting a todo moves it to **Trash**. Restore is reversible; permanent deletion requires confirmation.
+- Task history records creation, edits, status changes, deletion, restoration, and permanent deletion. Update entries contain old/new field values, including due dates.
+- Teachers can open **Audit log** to see their own edits, status changes, and deletions of todos belonging to students in their assigned class. Teacher audit access is role- and class-scoped.
+- Daily reports are available at `GET /api/todos/reports/daily?date=YYYY-MM-DD`; saved filters are private to the authenticated user. The calendar and matrix APIs also return only the authenticated user's active todos.
+- Run verification with `cd backend && npm test` and `cd frontend && npm run build`.
 # Todo-Manager
