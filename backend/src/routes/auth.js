@@ -36,7 +36,16 @@ function publicUser(user) {
     role: user.role,
     accountType: user.accountType,
     setupComplete: user.setupComplete,
-    classId: user.classId ?? null
+    classId: user.classId ?? null,
+    chronotype: user.chronotype,
+    dailyGoalHours: user.dailyGoalHours,
+    interests: user.interests,
+    leaderboardOptIn: user.leaderboardOptIn,
+    xp: user.xp,
+    currentStreak: user.currentStreak,
+    bestStreak: user.bestStreak,
+    lastStreakDate: user.lastStreakDate,
+    focusSettings: user.focusSettings
   };
 }
 
@@ -85,7 +94,7 @@ router.post("/login", loginLimiter, async (req, res, next) => {
 
     let user = await User.findOne({ email: parsed.data.email })
       .select("+password")
-      .select("_id email password role accountType setupComplete classId");
+      .select("_id email password role accountType setupComplete classId chronotype dailyGoalHours interests leaderboardOptIn xp currentStreak bestStreak lastStreakDate focusSettings");
     const passwordMatches = user && (await bcrypt.compare(parsed.data.password, user.password));
     if (!passwordMatches) {
       return res.status(401).json({ message: "Email or password is incorrect." });
@@ -97,7 +106,7 @@ router.post("/login", loginLimiter, async (req, res, next) => {
         user._id,
         { $set: { role: "SUPER_ADMIN", accountType: "personal", setupComplete: true, classId: null } },
         { new: true, runValidators: true }
-      ).select("_id email role accountType setupComplete classId");
+      ).select("_id email role accountType setupComplete classId chronotype dailyGoalHours interests leaderboardOptIn xp currentStreak bestStreak lastStreakDate focusSettings");
     }
 
     return res.json({ user: issueSession(user, res) });
@@ -121,8 +130,19 @@ router.get("/me", requireAuth, (req, res) => {
 });
 
 const setupSchema = z.discriminatedUnion("accountType", [
-  z.object({ accountType: z.literal("personal") }).strict(),
-  z.object({ accountType: z.literal("class"), classId: z.string().regex(/^[a-f\d]{24}$/i) }).strict()
+  z.object({
+    accountType: z.literal("personal"),
+    chronotype: z.enum(["morning", "night"]),
+    dailyGoalHours: z.number().min(0.5).max(16),
+    interests: z.array(z.string().trim().min(1).max(40)).max(12)
+  }).strict(),
+  z.object({
+    accountType: z.literal("class"),
+    classId: z.string().regex(/^[a-f\d]{24}$/i),
+    chronotype: z.enum(["morning", "night"]),
+    dailyGoalHours: z.number().min(0.5).max(16),
+    interests: z.array(z.string().trim().min(1).max(40)).max(12)
+  }).strict()
 ]);
 
 router.post("/setup", requireAuth, async (req, res, next) => {
@@ -134,7 +154,11 @@ router.post("/setup", requireAuth, async (req, res, next) => {
     if (parsed.data.accountType === "personal") {
       const user = await User.findByIdAndUpdate(
         req.user.id,
-        { $set: { accountType: "personal", classId: null, setupComplete: true } },
+        { $set: {
+          accountType: "personal", classId: null, setupComplete: true,
+          chronotype: parsed.data.chronotype, dailyGoalHours: parsed.data.dailyGoalHours,
+          interests: parsed.data.interests
+        } },
         { new: true, runValidators: true }
       );
       return res.json({ user: publicUser(user) });
@@ -149,7 +173,11 @@ router.post("/setup", requireAuth, async (req, res, next) => {
     });
     const user = await User.findByIdAndUpdate(
       req.user.id,
-      { $set: { accountType: "class", classId: null, setupComplete: true } },
+      { $set: {
+        accountType: "class", classId: null, setupComplete: true,
+        chronotype: parsed.data.chronotype, dailyGoalHours: parsed.data.dailyGoalHours,
+        interests: parsed.data.interests
+      } },
       { new: true, runValidators: true }
     );
     return res.status(201).json({ user: publicUser(user), request });

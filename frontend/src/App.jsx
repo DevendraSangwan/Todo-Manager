@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import AuthPage from "./pages/AuthPage.jsx";
 import Dashboard from "./pages/Dashboard.jsx";
+import { CategoriesPage, FocusPage, GoalsPage, MyDayPage } from "./pages/Phase4Pages.jsx";
 import {
   CalendarPage, DailyReportPage, PriorityMatrixPage, TeacherAuditPage, TrashPage
 } from "./pages/Phase3Pages.jsx";
@@ -43,8 +44,12 @@ export default function App() {
       />
       <Route
         path="/dashboard"
-        element={<ProtectedRoute roles={["STUDENT"]}><Dashboard /></ProtectedRoute>}
+        element={<ProtectedRoute><MyDayPage /></ProtectedRoute>}
       />
+      <Route path="/todos" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+      <Route path="/focus" element={<ProtectedRoute><FocusPage /></ProtectedRoute>} />
+      <Route path="/goals" element={<ProtectedRoute><GoalsPage /></ProtectedRoute>} />
+      <Route path="/categories" element={<ProtectedRoute><CategoriesPage /></ProtectedRoute>} />
       <Route path="/calendar" element={<ProtectedRoute><CalendarPage /></ProtectedRoute>} />
       <Route path="/matrix" element={<ProtectedRoute><PriorityMatrixPage /></ProtectedRoute>} />
       <Route path="/reports" element={<ProtectedRoute><DailyReportPage /></ProtectedRoute>} />

@@ -32,6 +32,11 @@ const todoSchema = new mongoose.Schema(
     },
     nextOccurrenceCreated: { type: Boolean, default: false },
     dueDate: { type: Date, required: true, index: true },
+    estimatedMinutes: { type: Number, min: 0, max: 100000, default: 0 },
+    actualMinutes: { type: Number, min: 0, max: 100000, default: 0 },
+    xpAwarded: { type: Boolean, default: false },
+    categoryId: { type: mongoose.Schema.Types.ObjectId, ref: "Category", default: null, index: true },
+    dependencies: [{ type: mongoose.Schema.Types.ObjectId, ref: "Todo" }],
     status: {
       type: String,
       enum: ["pending", "completed"],

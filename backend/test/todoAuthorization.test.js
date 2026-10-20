@@ -22,6 +22,7 @@ let baseUrl;
 let originalFindUser;
 let originalFindTodo;
 let originalAggregate;
+let originalCountDocuments;
 let token;
 
 before(async () => {
@@ -30,6 +31,7 @@ before(async () => {
   originalFindUser = User.findById;
   originalFindTodo = Todo.findById;
   originalAggregate = Todo.aggregate;
+  originalCountDocuments = Todo.countDocuments;
   User.findById = () => ({
     select: async () => ({
       id: studentId,
@@ -53,6 +55,7 @@ after(async () => {
   User.findById = originalFindUser;
   Todo.findById = originalFindTodo;
   Todo.aggregate = originalAggregate;
+  Todo.countDocuments = originalCountDocuments;
   await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
 });
 
@@ -64,6 +67,30 @@ test("a student cannot read another user's private todo", async () => {
   assert.deepEqual(await response.json(), { message: "You cannot read this todo." });
 });
 
+test("shared todos do not expose personal productivity fields", async () => {
+  const sharedTodo = {
+    ...privateTodo,
+    visibility: "public",
+    estimatedMinutes: 45,
+    actualMinutes: 25,
+    xpAwarded: true,
+    categoryId: "66a000000000000000000005",
+    dependencies: ["66a000000000000000000006"]
+  };
+  Todo.findById = () => ({ ...sharedTodo, lean: async () => sharedTodo });
+  const response = await fetch(`${baseUrl}/api/todos/${todoId}`, {
+    headers: { Cookie: `token=${token}` }
+  });
+  assert.equal(response.status, 200);
+  const { todo } = await response.json();
+  assert.equal(todo.visibility, "public");
+  assert.equal("estimatedMinutes" in todo, false);
+  assert.equal("actualMinutes" in todo, false);
+  assert.equal("xpAwarded" in todo, false);
+  assert.equal("categoryId" in todo, false);
+  assert.equal("dependencies" in todo, false);
+});
+
 test("a student cannot edit another user's private todo", async () => {
   const response = await fetch(`${baseUrl}/api/todos/${todoId}`, {
     method: "PATCH",
@@ -72,6 +99,26 @@ test("a student cannot edit another user's private todo", async () => {
   });
   assert.equal(response.status, 403);
   assert.deepEqual(await response.json(), { message: "You cannot edit this todo." });
+});
+
+test("a todo cannot be completed before its prerequisite", async () => {
+  Todo.findById = () => ({
+    ...privateTodo,
+    userId: studentId,
+    dependencies: ["66a000000000000000000004"],
+    deletedAt: null,
+    save: async () => {}
+  });
+  Todo.countDocuments = async () => 0;
+  const response = await fetch(`${baseUrl}/api/todos/${todoId}`, {
+    method: "PATCH",
+    headers: { Cookie: `token=${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ status: "completed" })
+  });
+  assert.equal(response.status, 409);
+  assert.deepEqual(await response.json(), {
+    message: "Complete this todo’s prerequisites before marking it complete."
+  });
 });
 
 test("daily report includes totals, completion percentage, and chart values", async () => {

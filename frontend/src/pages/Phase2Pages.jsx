@@ -2,47 +2,17 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext.jsx";
 import { api } from "../lib/api.js";
+import WorkspaceLayout from "../components/WorkspaceLayout.jsx";
 
 function PageShell({ title, children }) {
-  const { user, setUser } = useAuth();
-  const navigate = useNavigate();
-  const [logoutError, setLogoutError] = useState("");
-
-  async function logout() {
-    try {
-      await api("/auth/logout", { method: "POST" });
-      setUser(null);
-      navigate("/login", { replace: true });
-    } catch (error) {
-      setLogoutError(error.message);
-    }
-  }
-
   return (
-    <div className="app-shell">
-      <header className="topbar">
-        <Link className="topbar-brand" to="/dashboard"><span className="brand-mark small">D</span><span>daymark<span className="brand-period">.</span></span></Link>
-        <nav className="phase-nav" aria-label="Main navigation">
-          <Link to="/dashboard">Todos</Link>
-          <Link to="/calendar">Calendar</Link>
-          <Link to="/matrix">Matrix</Link>
-          <Link to="/reports">Reports</Link>
-          <Link to="/trash">Trash</Link>
-          {user?.role === "SUPER_ADMIN" && <Link to="/admin">Admin</Link>}
-          {user?.role === "TEACHER_ADMIN" && <><Link to="/teacher">Teacher</Link><Link to="/teacher/audit">Audit log</Link></>}
-          {user?.classId && user.role === "STUDENT" && <Link to="/classmates">Classmates</Link>}
-          <Link to="/friends">Friends</Link>
-          <Link to="/notifications">Notifications</Link>
-        </nav>
-        <div className="topbar-actions"><span className="user-email">{user?.email}</span><button className="logout-button" onClick={logout} type="button">Log out</button></div>
-      </header>
+    <WorkspaceLayout>
       <main className="phase-page">
-        <ErrorMessage>{logoutError}</ErrorMessage>
         <p className="eyebrow">DAYMARK · PHASE 2</p>
         <h1>{title}</h1>
         {children}
       </main>
-    </div>
+    </WorkspaceLayout>
   );
 }
 
@@ -54,6 +24,10 @@ export function OnboardingPage() {
   const { setUser } = useAuth();
   const navigate = useNavigate();
   const [classes, setClasses] = useState([]);
+  const [step, setStep] = useState(1);
+  const [chronotype, setChronotype] = useState("");
+  const [dailyGoalHours, setDailyGoalHours] = useState(2);
+  const [interests, setInterests] = useState("");
   const [choice, setChoice] = useState("");
   const [classId, setClassId] = useState("");
   const [error, setError] = useState("");
@@ -70,6 +44,9 @@ export function OnboardingPage() {
       const body = choice === "personal"
         ? { accountType: "personal" }
         : { accountType: "class", classId };
+      body.chronotype = chronotype;
+      body.dailyGoalHours = Number(dailyGoalHours);
+      body.interests = interests.split(",").map((interest) => interest.trim()).filter(Boolean);
       const { user } = await api("/auth/setup", { method: "POST", body: JSON.stringify(body) });
       setUser(user);
       navigate("/dashboard", { replace: true });
@@ -81,29 +58,53 @@ export function OnboardingPage() {
   }
 
   return (
-    <PageShell title="How will you use Daymark?">
+    <PageShell title={["", "When do you feel most focused?", "What are you working toward?", "How will you use Daymark?"][step]}>
       <section className="phase-card">
-        <p>Choose a space to get started. Class membership starts only after your teacher approves your request.</p>
-        <div className="choice-grid">
-          <button className={`choice-card${choice === "personal" ? " selected" : ""}`} onClick={() => setChoice("personal")} type="button">
-            <strong>Personal use</strong><span>Keep your todos private to you.</span>
+        <p>Step {step} of 3 · You can update these preferences later.</p>
+        {step === 1 && <div className="choice-grid">
+          <button className={`choice-card${chronotype === "morning" ? " selected" : ""}`} onClick={() => setChronotype("morning")} type="button">
+            <strong>Morning person</strong><span>I do my best work earlier in the day.</span>
           </button>
-          <button className={`choice-card${choice === "class" ? " selected" : ""}`} onClick={() => setChoice("class")} type="button">
-            <strong>Join a class</strong><span>Share selected todos with classmates.</span>
+          <button className={`choice-card${chronotype === "night" ? " selected" : ""}`} onClick={() => setChronotype("night")} type="button">
+            <strong>Night owl</strong><span>I find my focus later in the day.</span>
           </button>
-        </div>
-        {choice === "class" && (
-          <label className="phase-field">Choose a class
-            <select value={classId} onChange={(event) => setClassId(event.target.value)}>
-              <option value="">Select a class…</option>
-              {classes.map((classroom) => <option key={classroom._id} value={classroom._id}>{classroom.name}</option>)}
-            </select>
+        </div>}
+        {step === 2 && <>
+          <label className="phase-field">Daily goal hours
+            <input max="16" min="0.5" onChange={(event) => setDailyGoalHours(event.target.value)} step="0.5" type="number" value={dailyGoalHours} />
           </label>
-        )}
+          <label className="phase-field">Interests <span className="optional">(comma-separated)</span>
+            <input maxLength={480} onChange={(event) => setInterests(event.target.value)} placeholder="Study, Coding, Health" value={interests} />
+          </label>
+        </>}
+        {step === 3 && <>
+          <p>Choose a space to get started. Class membership starts only after your teacher approves your request.</p>
+          <div className="choice-grid">
+            <button className={`choice-card${choice === "personal" ? " selected" : ""}`} onClick={() => setChoice("personal")} type="button">
+              <strong>Personal use</strong><span>Keep your todos private to you.</span>
+            </button>
+            <button className={`choice-card${choice === "class" ? " selected" : ""}`} onClick={() => setChoice("class")} type="button">
+              <strong>Join a class</strong><span>Share selected todos with classmates.</span>
+            </button>
+          </div>
+          {choice === "class" && (
+            <label className="phase-field">Choose a class
+              <select value={classId} onChange={(event) => setClassId(event.target.value)}>
+                <option value="">Select a class…</option>
+                {classes.map((classroom) => <option key={classroom._id} value={classroom._id}>{classroom.name}</option>)}
+              </select>
+            </label>
+          )}
+        </>}
         <ErrorMessage>{error}</ErrorMessage>
-        <button className="primary-button" disabled={!choice || (choice === "class" && !classId) || busy} onClick={continueSetup} type="button">
-          {busy ? "Saving…" : choice === "class" ? "Send join request" : "Go to my dashboard"}
-        </button>
+        <div className="phase3-actions">
+          {step > 1 && <button className="secondary-button" disabled={busy} onClick={() => setStep((current) => current - 1)} type="button">Back</button>}
+          {step < 3
+            ? <button className="primary-button" disabled={busy || (step === 1 && !chronotype)} onClick={() => setStep((current) => current + 1)} type="button">Continue</button>
+            : <button className="primary-button" disabled={!choice || (choice === "class" && !classId) || busy} onClick={continueSetup} type="button">
+              {busy ? "Saving…" : choice === "class" ? "Send join request" : "Go to my dashboard"}
+            </button>}
+        </div>
       </section>
     </PageShell>
   );

@@ -6,12 +6,20 @@ import User from "../models/User.js";
 import AccessRequest from "../models/AccessRequest.js";
 import TaskHistory from "../models/TaskHistory.js";
 import SavedFilter from "../models/SavedFilter.js";
+import Category from "../models/Category.js";
 import { requireAuth } from "../middleware/auth.js";
+import { updateDailyProductivity } from "../utils/productivity.js";
 
 const router = Router();
 const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 const priorities = ["urgent-important", "important-not-urgent", "urgent-not-important", "neither"];
 const prioritySchema = z.enum([...priorities, "low", "medium", "high"]);
+const ownerOnlyTodoFields = ["estimatedMinutes", "actualMinutes", "xpAwarded", "categoryId", "dependencies"];
+function hideOwnerOnlyTodoFields(todo) {
+  const sharedTodo = { ...todo };
+  for (const field of ownerOnlyTodoFields) delete sharedTodo[field];
+  return sharedTodo;
+}
 const subtaskSchema = z.object({
   _id: z.string().regex(/^[a-f\d]{24}$/i).optional(),
   title: z.string().trim().min(1).max(120),
@@ -22,6 +30,10 @@ const createTodoSchema = z.object({
   description: z.string().trim().max(2000).optional().default(""),
   priority: z.enum(priorities).optional().default("important-not-urgent"),
   dueDate: z.string().datetime({ offset: true }),
+  estimatedMinutes: z.number().int().min(0).max(100000).optional().default(0),
+  categoryId: z.string().regex(/^[a-f\d]{24}$/i).nullable().optional().default(null),
+  dependencies: z.array(z.string().regex(/^[a-f\d]{24}$/i)).max(30).optional().default([])
+    .refine((ids) => !ids || new Set(ids).size === ids.length, "Dependencies must be unique."),
   subtasks: z.array(subtaskSchema).max(30).optional().default([]),
   repeatFrequency: z.enum(["daily", "weekly", "monthly"]).nullable().optional().default(null),
   visibility: z.enum(["private", "classmates", "public"]).optional().default("private")
@@ -31,6 +43,11 @@ const updateTodoSchema = z.object({
   description: z.string().trim().max(2000).optional(),
   priority: prioritySchema.optional(),
   dueDate: z.string().datetime({ offset: true }).optional(),
+  estimatedMinutes: z.number().int().min(0).max(100000).optional(),
+  actualMinutes: z.number().int().min(0).max(100000).optional(),
+  categoryId: z.string().regex(/^[a-f\d]{24}$/i).nullable().optional(),
+  dependencies: z.array(z.string().regex(/^[a-f\d]{24}$/i)).max(30).optional()
+    .refine((ids) => !ids || new Set(ids).size === ids.length, "Dependencies must be unique."),
   subtasks: z.array(subtaskSchema).max(30).optional(),
   repeatFrequency: z.enum(["daily", "weekly", "monthly"]).nullable().optional(),
   visibility: z.enum(["private", "classmates", "public"]).optional(),
@@ -117,6 +134,8 @@ router.get("/", async (req, res, next) => {
 
     const [todos, total] = await Promise.all([
       Todo.find(filter)
+        .populate("categoryId", "name color")
+        .populate("dependencies", "title status")
         .sort({ dueDate: 1, createdAt: -1 })
         .skip((pageValue - 1) * limitValue)
         .limit(limitValue)
@@ -288,7 +307,7 @@ router.get("/:id", async (req, res, next) => {
         req.user.accountType === "class" &&
         req.user.classId &&
         String(todo.classId) === String(req.user.classId);
-      const friendship = todo.visibility !== "private" && await AccessRequest.exists({
+      const friendship = !publicTodo && !classmatesTodo && todo.visibility !== "private" && await AccessRequest.exists({
         requesterId: req.user.id,
         recipientId: todo.userId,
         kind: "friend_access",
@@ -297,6 +316,7 @@ router.get("/:id", async (req, res, next) => {
       if (!publicTodo && !classmatesTodo && !friendship) {
         return res.status(403).json({ message: "You cannot read this todo." });
       }
+      return res.json({ todo: hideOwnerOnlyTodoFields(todo) });
     }
     return res.json({ todo });
   } catch (error) {
@@ -310,10 +330,22 @@ router.post("/", async (req, res, next) => {
     if (!parsed.success) {
       return res.status(400).json({ message: "Check the todo fields and try again." });
     }
+    if (parsed.data.categoryId && !await Category.exists({ _id: parsed.data.categoryId, userId: req.user.id })) {
+      return res.status(400).json({ message: "Choose one of your own categories." });
+    }
+    if (parsed.data.dependencies.length) {
+      const dependencies = await Todo.find({
+        _id: { $in: parsed.data.dependencies }, userId: req.user.id, deletedAt: null
+      }).select("_id").lean();
+      if (dependencies.length !== parsed.data.dependencies.length) {
+        return res.status(400).json({ message: "Dependencies must be active todos that belong to you." });
+      }
+    }
     const classId = req.user.role === "STUDENT" && req.user.accountType === "class" ? req.user.classId : null;
     const todo = await Todo.create({
       ...parsed.data,
       dueDate: new Date(parsed.data.dueDate),
+      categoryId: parsed.data.categoryId,
       userId: req.user.id,
       classId
     });
@@ -323,6 +355,7 @@ router.post("/", async (req, res, next) => {
       action: "created",
       changes: [{ field: "title", oldValue: null, newValue: todo.title }]
     });
+    await updateDailyProductivity(req.user._id, todo.dueDate.toISOString().slice(0, 10));
     return res.status(201).json({ todo });
   } catch (error) {
     return next(error);
@@ -362,7 +395,46 @@ router.patch("/:id", async (req, res, next) => {
     if (!isOwner && !isClassTeacher) {
       return res.status(403).json({ message: "You cannot edit this todo." });
     }
+    if (!isOwner && ["estimatedMinutes", "actualMinutes", "categoryId", "dependencies"].some((field) => field in parsed.data)) {
+      return res.status(403).json({ message: "Only the todo owner can change personal productivity details." });
+    }
 
+    if (parsed.data.status === "pending" && currentTodo.status === "completed") {
+      const completedDependent = await Todo.exists({
+        userId: currentTodo.userId,
+        dependencies: currentTodo._id,
+        status: "completed",
+        deletedAt: null
+      });
+      if (completedDependent) {
+        return res.status(409).json({ message: "Reopen dependent todos before reopening this prerequisite." });
+      }
+    }
+    if (parsed.data.status === "completed" && currentTodo.dependencies.length) {
+      const completedDependencies = await Todo.countDocuments({
+        _id: { $in: currentTodo.dependencies }, userId: currentTodo.userId, status: "completed", deletedAt: null
+      });
+      if (completedDependencies !== currentTodo.dependencies.length) {
+        return res.status(409).json({ message: "Complete this todo’s prerequisites before marking it complete." });
+      }
+    }
+    if (isOwner && parsed.data.categoryId && !await Category.exists({ _id: parsed.data.categoryId, userId: req.user.id })) {
+      return res.status(400).json({ message: "Choose one of your own categories." });
+    }
+    if (isOwner && parsed.data.dependencies) {
+      const existingDependencies = await Todo.find({
+        _id: { $in: parsed.data.dependencies },
+        userId: req.user.id,
+        deletedAt: null,
+        createdAt: { $lt: currentTodo.createdAt }
+      }).select("_id").lean();
+      if (existingDependencies.length !== parsed.data.dependencies.length ||
+          parsed.data.dependencies.some((dependencyId) => String(dependencyId) === String(currentTodo._id))) {
+        return res.status(400).json({ message: "Dependencies must be active earlier todos that belong to you." });
+      }
+    }
+
+    const previousDueDate = currentTodo.dueDate.toISOString().slice(0, 10);
     const changes = [];
     for (const [field, value] of Object.entries(parsed.data)) {
       const nextValue = field === "dueDate" ? new Date(value) : value;
@@ -379,6 +451,26 @@ router.patch("/:id", async (req, res, next) => {
         actorId: req.user.id, actorEmail: req.user.email, actorRole: req.user.role,
         action: "updated", changes
       });
+    }
+    const productivityDates = new Set();
+    if (changes.some(({ field }) => field === "status")) {
+      productivityDates.add(currentTodo.dueDate.toISOString().slice(0, 10));
+    }
+    if (changes.some(({ field }) => field === "dueDate")) {
+      productivityDates.add(previousDueDate);
+      productivityDates.add(currentTodo.dueDate.toISOString().slice(0, 10));
+    }
+    if (productivityDates.size) {
+      const rewards = [];
+      if (isOwner && currentTodo.status === "completed" && !currentTodo.xpAwarded) {
+        const reward = await Todo.updateOne(
+          { _id: currentTodo._id, $or: [{ xpAwarded: false }, { xpAwarded: { $exists: false } }] },
+          { $set: { xpAwarded: true } }
+        );
+        if (reward.modifiedCount) rewards.push(User.updateOne({ _id: req.user.id }, { $inc: { xp: 10 } }));
+      }
+      for (const date of productivityDates) rewards.push(updateDailyProductivity(currentTodo.userId, date));
+      await Promise.all(rewards);
     }
 
     if (parsed.data.status === "completed" &&
@@ -402,6 +494,9 @@ router.patch("/:id", async (req, res, next) => {
         title: currentTodo.title, description: currentTodo.description,
         priority: currentTodo.priority, dueDate: nextDate, status: "pending",
         visibility: currentTodo.visibility, repeatFrequency: currentTodo.repeatFrequency,
+        estimatedMinutes: currentTodo.estimatedMinutes,
+        categoryId: currentTodo.categoryId,
+        dependencies: currentTodo.dependencies,
         subtasks: currentTodo.subtasks.map(({ title }) => ({ title, completed: false }))
       });
       await TaskHistory.create({
@@ -410,8 +505,9 @@ router.patch("/:id", async (req, res, next) => {
         action: "created",
         changes: [{ field: "recurringFrom", oldValue: currentTodo._id, newValue: nextTodo.dueDate }]
       });
+      await updateDailyProductivity(currentTodo.userId, nextDate.toISOString().slice(0, 10));
     }
-    const todo = currentTodo;
+    const todo = isOwner ? currentTodo : hideOwnerOnlyTodoFields(currentTodo.toObject());
     return res.json({ todo });
   } catch (error) {
     return next(error);
@@ -438,6 +534,12 @@ router.delete("/:id", async (req, res, next) => {
     }
     if (!isOwner && !isClassTeacher) return res.status(403).json({ message: "You cannot delete this todo." });
     if (todo.deletedAt) return res.status(404).json({ message: "Todo not found." });
+    const hasDependents = await Todo.exists({
+      userId: todo.userId,
+      dependencies: todo._id,
+      deletedAt: null
+    });
+    if (hasDependents) return res.status(409).json({ message: "Remove dependent todos before deleting this prerequisite." });
     todo.deletedAt = new Date();
     todo.deletedBy = req.user.id;
     await todo.save();
@@ -447,6 +549,7 @@ router.delete("/:id", async (req, res, next) => {
       action: "deleted",
       changes: [{ field: "deletedAt", oldValue: null, newValue: todo.deletedAt }]
     });
+    await updateDailyProductivity(todo.userId, todo.dueDate.toISOString().slice(0, 10));
     return res.json({ message: "Todo deleted." });
   } catch (error) {
     return next(error);
@@ -467,6 +570,7 @@ router.post("/:id/restore", async (req, res, next) => {
       actorId: req.user.id, actorEmail: req.user.email, actorRole: req.user.role,
       action: "restored", changes: [{ field: "deletedAt", oldValue, newValue: null }]
     });
+    await updateDailyProductivity(todo.userId, todo.dueDate.toISOString().slice(0, 10));
     return res.json({ todo });
   } catch (error) {
     return next(error);

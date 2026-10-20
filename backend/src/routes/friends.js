@@ -35,7 +35,8 @@ router.get("/:friendId/todos", async (req, res, next) => {
       deletedAt: null
     };
     const [todos, total] = await Promise.all([
-      Todo.find(filter).sort({ dueDate: 1, createdAt: -1 }).skip((page - 1) * limit).limit(limit).lean(),
+      Todo.find(filter).select("-estimatedMinutes -actualMinutes -xpAwarded -categoryId -dependencies")
+        .sort({ dueDate: 1, createdAt: -1 }).skip((page - 1) * limit).limit(limit).lean(),
       Todo.countDocuments(filter)
     ]);
     return res.json({ friend, todos, pagination: { page, limit, total, pages: Math.ceil(total / limit) } });

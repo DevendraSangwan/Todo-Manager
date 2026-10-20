@@ -1,7 +1,6 @@
 import { lazy, Suspense, useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { useAuth } from "../context/AuthContext.jsx";
 import { api } from "../lib/api.js";
+import WorkspaceLayout from "../components/WorkspaceLayout.jsx";
 
 const DailyReportChart = lazy(() => import("../components/DailyReportChart.jsx"));
 const quadrants = [
@@ -22,41 +21,14 @@ const dateValue = (value = new Date()) => {
 };
 
 function Phase3Shell({ title, children }) {
-  const { user, setUser } = useAuth();
-  const navigate = useNavigate();
-  const [error, setError] = useState("");
-
-  async function logout() {
-    try {
-      await api("/auth/logout", { method: "POST" });
-      setUser(null);
-      navigate("/login", { replace: true });
-    } catch (requestError) {
-      setError(requestError.message);
-    }
-  }
-
   return (
-    <div className="app-shell">
-      <header className="topbar">
-        <Link className="topbar-brand" to="/dashboard"><span className="brand-mark small">D</span><span>daymark<span className="brand-period">.</span></span></Link>
-        <nav className="phase-nav phase3-nav" aria-label="Main navigation">
-          <Link to="/dashboard">Todos</Link>
-          <Link to="/calendar">Calendar</Link>
-          <Link to="/matrix">Matrix</Link>
-          <Link to="/reports">Reports</Link>
-          <Link to="/trash">Trash</Link>
-          {user?.role === "TEACHER_ADMIN" && <Link to="/teacher/audit">Audit log</Link>}
-        </nav>
-        <div className="topbar-actions"><span className="user-email">{user?.email}</span><button className="logout-button" onClick={logout} type="button">Log out</button></div>
-      </header>
+    <WorkspaceLayout>
       <main className="phase-page">
         <p className="eyebrow">DAYMARK · PHASE 3</p>
         <h1>{title}</h1>
-        {error && <p className="inline-error" role="alert">{error}</p>}
         {children}
       </main>
-    </div>
+    </WorkspaceLayout>
   );
 }
 

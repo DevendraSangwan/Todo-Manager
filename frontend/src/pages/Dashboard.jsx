@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  ArrowDown, ArrowLeft, ArrowRight, CalendarDays, Check, CheckCheck, Circle, ClipboardList,
-  History, LogOut, Moon, Plus, Search, Sun, Trash2
+  ArrowDown, ArrowLeft, ArrowRight, Check, CheckCheck, Circle, ClipboardList,
+  History, Plus, Search, Trash2
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext.jsx";
 import { api } from "../lib/api.js";
+import WorkspaceLayout from "../components/WorkspaceLayout.jsx";
 
 const tabs = [
   { id: "add", label: "Add Todo", icon: Plus },
@@ -45,7 +46,6 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const { user, setUser } = useAuth();
   const [tab, setTab] = useState("all");
-  const [theme, setTheme] = useState(() => localStorage.getItem("daymark-theme") ?? "light");
   const [page, setPage] = useState(1);
   const [todos, setTodos] = useState([]);
   const [pagination, setPagination] = useState({ page: 1, pages: 0, total: 0 });
@@ -64,16 +64,16 @@ export default function Dashboard() {
     description: "",
     priority: "important-not-urgent",
     dueDate: localDateValue(),
-    visibility: "private"
+    visibility: "private",
+    estimatedMinutes: 0,
+    categoryId: ""
   });
   const [subtaskText, setSubtaskText] = useState("");
   const [repeatFrequency, setRepeatFrequency] = useState("");
   const [completionDraft, setCompletionDraft] = useState(null);
-
-  useEffect(() => {
-    document.documentElement.dataset.theme = theme;
-    localStorage.setItem("daymark-theme", theme);
-  }, [theme]);
+  const [categories, setCategories] = useState([]);
+  const [dependencyIds, setDependencyIds] = useState([]);
+  const [dependencyOptions, setDependencyOptions] = useState([]);
 
   const loadTodos = useCallback(async () => {
     setLoadError("");
@@ -104,6 +104,15 @@ export default function Dashboard() {
     api("/todos/saved-filters").then((result) => setSavedFilters(result.filters)).catch((error) => setLoadError(error.message));
   }, []);
 
+  useEffect(() => {
+    Promise.all([api("/productivity/categories"), api("/todos?limit=50")])
+      .then(([categoryResult, todoResult]) => {
+        setCategories(categoryResult.categories);
+        setDependencyOptions(todoResult.todos);
+      })
+      .catch((error) => setLoadError(error.message));
+  }, []);
+
   const groupedTodos = useMemo(() => {
     return todos.reduce((groups, todo) => {
       const key = new Date(todo.dueDate).toLocaleDateString();
@@ -131,14 +140,18 @@ export default function Dashboard() {
         body: JSON.stringify({
           ...form,
           dueDate,
+          estimatedMinutes: Number(form.estimatedMinutes),
+          categoryId: form.categoryId || null,
+          dependencies: dependencyIds,
           priority: form.priority === "medium" ? "important-not-urgent" : form.priority,
           subtasks: subtaskText.split("\n").map((title) => title.trim()).filter(Boolean).map((title) => ({ title })),
           repeatFrequency: repeatFrequency || null
         })
       });
-      setForm({ title: "", description: "", priority: "important-not-urgent", dueDate: localDateValue(), visibility: "private" });
+      setForm({ title: "", description: "", priority: "important-not-urgent", dueDate: localDateValue(), visibility: "private", estimatedMinutes: 0, categoryId: "" });
       setSubtaskText("");
       setRepeatFrequency("");
+      setDependencyIds([]);
       setTab("all");
       setPage(1);
     } catch (error) {
@@ -233,56 +246,11 @@ export default function Dashboard() {
     setPage(1);
   }
 
-  async function logout() {
-    try {
-      await api("/auth/logout", { method: "POST" });
-    } catch (error) {
-      setLoadError(error.message);
-      return;
-    }
-    setUser(null);
-    navigate("/login", { replace: true });
-  }
-
   const pageTitle = tab === "add" ? "A fresh start" : tabs.find((item) => item.id === tab)?.label;
   const greetingName = user?.email?.split("@")[0] ?? "there";
 
   return (
-    <div className="app-shell">
-      <header className="topbar">
-        <a className="topbar-brand" href="/dashboard" onClick={(event) => { event.preventDefault(); chooseTab("all"); }}>
-          <span className="brand-mark small"><ClipboardList size={18} /></span>
-          <span>daymark<span className="brand-period">.</span></span>
-        </a>
-        <nav className="phase-nav dashboard-nav" aria-label="Main navigation">
-          <Link to="/calendar"><CalendarDays size={14} />Calendar</Link>
-          <Link to="/matrix">Matrix</Link>
-          <Link to="/reports">Reports</Link>
-          <Link to="/trash">Trash</Link>
-          {user?.role === "SUPER_ADMIN" && <Link to="/admin">Admin panel</Link>}
-          {user?.role === "TEACHER_ADMIN" && <Link to="/teacher">Teacher panel</Link>}
-          {user?.role === "TEACHER_ADMIN" && <Link to="/teacher/audit">Audit log</Link>}
-          {user?.classId && user.role === "STUDENT" && <Link to="/classmates">Classmates’ todos</Link>}
-          {user?.role === "STUDENT" && <Link to="/friends">Friends</Link>}
-          {user?.role === "STUDENT" && <Link to="/notifications">Notifications</Link>}
-        </nav>
-        <div className="topbar-actions">
-          <button
-            aria-label={`Switch to ${theme === "light" ? "dark" : "light"} mode`}
-            className="icon-button theme-button"
-            onClick={() => setTheme((value) => value === "light" ? "dark" : "light")}
-            title="Toggle theme"
-            type="button"
-          >
-            {theme === "light" ? <Moon size={18} /> : <Sun size={18} />}
-          </button>
-          <span className="user-email">{user?.email}</span>
-          <button className="logout-button" onClick={logout} type="button">
-            <LogOut size={16} /><span>Log out</span>
-          </button>
-        </div>
-      </header>
-
+    <WorkspaceLayout>
       <main className="dashboard-layout">
         <section className="welcome-row">
           <div>
@@ -359,7 +327,22 @@ export default function Dashboard() {
                       <option value="private">Private</option><option value="classmates">Classmates</option><option value="public">Public</option>
                     </select>
                   </div>
+                  <div>
+                    <label htmlFor="todo-estimate">Estimate (minutes)</label>
+                    <input id="todo-estimate" min="0" max="100000" onChange={(event) => setForm((value) => ({ ...value, estimatedMinutes: event.target.value }))} type="number" value={form.estimatedMinutes} />
+                  </div>
+                  <div>
+                    <label htmlFor="todo-category">Category</label>
+                    <select id="todo-category" onChange={(event) => setForm((value) => ({ ...value, categoryId: event.target.value }))} value={form.categoryId}>
+                      <option value="">Uncategorized</option>
+                      {categories.map((category) => <option key={category._id} value={category._id}>{category.name}</option>)}
+                    </select>
+                  </div>
                 </div>
+                <label htmlFor="todo-dependencies">Blocked by <span className="optional">(optional prerequisites)</span></label>
+                <select id="todo-dependencies" multiple onChange={(event) => setDependencyIds(Array.from(event.target.selectedOptions, (option) => option.value))} value={dependencyIds}>
+                  {dependencyOptions.filter((todo) => todo.status !== "completed").map((todo) => <option key={todo._id} value={todo._id}>{todo.title}</option>)}
+                </select>
                 <label htmlFor="todo-subtasks">Checklist <span className="optional">(one sub-task per line)</span></label>
                 <textarea id="todo-subtasks" maxLength={3900} onChange={(event) => setSubtaskText(event.target.value)} placeholder={"Read chapter 1\nTake notes"} value={subtaskText} />
                 <label htmlFor="todo-repeat">Repeat</label>
@@ -404,10 +387,11 @@ export default function Dashboard() {
                         <h3><span className="group-date-dot" />{displayDate(dateTodos[0].dueDate)}</h3>
                         <div className="todo-list">
                           {dateTodos.map((todo) => (
-                            <article className={`todo-item${todo.status === "completed" ? " is-completed" : ""}`} key={todo._id}>
+                            <article className={`todo-item${todo.status === "completed" ? " is-completed" : ""}${todo.dependencies?.some((dependency) => dependency.status !== "completed") ? " is-locked" : ""}`} key={todo._id}>
                               <button
                                 aria-label={todo.status === "completed" ? `Mark ${todo.title} pending` : `Mark ${todo.title} complete`}
                                 className={`todo-check${todo.status === "completed" ? " checked" : ""}`}
+                                disabled={todo.status !== "completed" && todo.dependencies?.some((dependency) => dependency.status !== "completed")}
                                 onClick={() => todo.status === "completed"
                                   ? updateTodo(todo._id, { status: "pending" })
                                   : setCompletionDraft(todo._id)}
@@ -420,6 +404,11 @@ export default function Dashboard() {
                                   <h4>{todo.title}</h4>
                                   <span className={`priority-badge priority-${todo.priority}`}>{priorityLabels[todo.priority] ?? todo.priority}</span>
                                 </div>
+                                <p className="todo-time-summary">
+                                  Estimate: {todo.estimatedMinutes ?? 0} min · Actual: {todo.actualMinutes ?? 0} min
+                                  {todo.categoryId?.name && <> · <span className="category-inline">{todo.categoryId.name}</span></>}
+                                </p>
+                                {todo.dependencies?.some((dependency) => dependency.status !== "completed") && <p className="todo-locked-note">Complete first: {todo.dependencies.filter((dependency) => dependency.status !== "completed").map(({ title }) => title).join(", ")}</p>}
                                 {todo.description && <p className="todo-description">{todo.description}</p>}
                                 {todo.repeatFrequency && <p className="todo-description">Repeats {todo.repeatFrequency}</p>}
                                 {todo.subtasks?.length > 0 && <ul className="subtask-list">{todo.subtasks.map((subtask) => (
@@ -476,6 +465,6 @@ export default function Dashboard() {
         </section>
         <footer className="dashboard-footer"><span>Made for your next small win.</span><ArrowDown size={14} /></footer>
       </main>
-    </div>
+    </WorkspaceLayout>
   );
 }

@@ -76,4 +76,17 @@ List APIs accept `page`, `limit`, optional `status`, and optional `date=YYYY-MM-
 - Teachers can open **Audit log** to see their own edits, status changes, and deletions of todos belonging to students in their assigned class. Teacher audit access is role- and class-scoped.
 - Daily reports are available at `GET /api/todos/reports/daily?date=YYYY-MM-DD`; saved filters are private to the authenticated user. The calendar and matrix APIs also return only the authenticated user's active todos.
 - Run verification with `cd backend && npm test` and `cd frontend && npm run build`.
+
+## Phase 4
+
+- **My Day** is the default student dashboard. It shows today's and overdue todos, the top three priorities, daily completion progress, habits, category progress, XP, and the current streak.
+- **Focus** offers an explicit-start countdown with configurable focus, short-break, and long-break durations. Focus time is logged against a selected todo only after the user confirms the actual minutes; manual time logging is also available.
+- Todos can store estimated minutes, actual minutes, a personal category, and prerequisite todo IDs. The API rejects completion while a prerequisite is pending. First-time completion awards 10 XP.
+- Streaks qualify when at least 80% of a user's active todos due on that UTC date are completed. Daily records and streak history are private to the account.
+- Class leaderboard access is disabled by default and requires opt-in. It is limited to opted-in students in the same class and exposes XP/streak only, never todo data.
+- **Goals & habits** lets users create goals with milestones and check habits off by day. **Categories** supports user-created labels and completion progress.
+- Registration onboarding has three steps for chronotype, daily goal hours/interests, and personal-vs-class setup. The profile values are saved on the user account.
+- Students, teachers, and super-admins all have private My Day, Todos, Focus, Goals & habits, Categories, Calendar, Matrix, Reports, and Trash pages; teacher/admin management panels are separate sidebar destinations.
+- Phase 4 APIs live under `/api/productivity`; all endpoints require authentication and keep profile, goals, habits, categories, sessions, and streak data scoped to the current user.
+- No AI API integrations or calls are included.
 # Todo-Manager
