@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Brain, CalendarClock, Check, Clock3, Lightbulb, ListChecks, MessageSquareText,
-  Mic, RefreshCw, Send, Sparkles, Target, Undo2
+  Mic, RefreshCw, Send, Sparkles, Square, Target, Undo2
 } from "lucide-react";
 import WorkspaceLayout from "../components/WorkspaceLayout.jsx";
 import { api } from "../lib/api.js";
@@ -75,6 +75,11 @@ export default function AIPage() {
   const [goalTargetDate, setGoalTargetDate] = useState("");
   const [goalPlan, setGoalPlan] = useState(null);
   const [transcript, setTranscript] = useState("");
+  const [interimTranscript, setInterimTranscript] = useState("");
+  const [isListening, setIsListening] = useState(false);
+  const [captureFinished, setCaptureFinished] = useState(false);
+  const recognitionRef = useRef(null);
+  const finalTranscriptRef = useRef("");
   const [voiceDraft, setVoiceDraft] = useState(null);
   const [report, setReport] = useState(null);
   const [actionPreview, setActionPreview] = useState(null);
@@ -90,6 +95,17 @@ export default function AIPage() {
       })
       .catch((requestError) => setError(requestError.message));
   }, []);
+
+  useEffect(() => () => {
+    recognitionRef.current?.abort();
+    recognitionRef.current = null;
+  }, []);
+
+  useEffect(() => {
+    if (active !== "voice" && recognitionRef.current) {
+      recognitionRef.current.stop();
+    }
+  }, [active]);
 
   async function perform(key, callback) {
     setBusy(key);
@@ -217,13 +233,58 @@ export default function AIPage() {
       setError("Speech recognition is not supported in this browser. You can still type a transcript below.");
       return;
     }
-    const recognition = new SpeechRecognition();
-    recognition.lang = navigator.language;
-    recognition.interimResults = false;
-    recognition.maxAlternatives = 1;
-    recognition.onresult = (event) => setTranscript(event.results[0][0].transcript);
-    recognition.onerror = (event) => setError(`Speech recognition failed: ${event.error}. You can enter the transcript manually.`);
-    recognition.start();
+    try {
+      setError("");
+      setNotice("");
+      setCaptureFinished(false);
+      setInterimTranscript("");
+      finalTranscriptRef.current = transcript.trim();
+      if (finalTranscriptRef.current) finalTranscriptRef.current += " ";
+      const recognition = new SpeechRecognition();
+      recognitionRef.current = recognition;
+      recognition.lang = navigator.language;
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.maxAlternatives = 1;
+      recognition.onstart = () => setIsListening(true);
+      recognition.onresult = (event) => {
+        let interim = "";
+        for (let index = event.resultIndex; index < event.results.length; index += 1) {
+          const text = event.results[index][0].transcript.trim();
+          if (event.results[index].isFinal && text) {
+            finalTranscriptRef.current = `${finalTranscriptRef.current}${text} `.trim();
+          } else {
+            interim += `${text} `;
+          }
+        }
+        setTranscript(finalTranscriptRef.current);
+        setInterimTranscript(interim.trim());
+      };
+      recognition.onerror = (event) => {
+        setIsListening(false);
+        setInterimTranscript("");
+        if (event.error !== "aborted") {
+          setError(`Speech recognition failed: ${event.error}. You can enter the transcript manually.`);
+        }
+      };
+      recognition.onend = () => {
+        setIsListening(false);
+        setInterimTranscript("");
+        setCaptureFinished(true);
+        recognitionRef.current = null;
+      };
+      recognition.start();
+    } catch (requestError) {
+      recognitionRef.current = null;
+      setIsListening(false);
+      setError(`Could not start voice capture: ${requestError.message}`);
+    }
+  }
+
+  function stopVoiceCapture() {
+    if (!recognitionRef.current) return;
+    setIsListening(false);
+    recognitionRef.current.stop();
   }
 
   async function parseTranscript(event) {
@@ -255,6 +316,9 @@ export default function AIPage() {
       });
       setVoiceDraft(null);
       setTranscript("");
+      setInterimTranscript("");
+      finalTranscriptRef.current = "";
+      setCaptureFinished(false);
       setNotice("Your reviewed voice todo was created privately.");
       await refreshTodos();
     });
@@ -392,11 +456,42 @@ export default function AIPage() {
         </Panel>}
 
         {active === "voice" && <Panel title="Speak a todo, then review it" icon={Mic} description="Speech recognition stays in your browser. The transcript is sent to the backend only after you ask AI to parse it.">
-          <button className="secondary-button" onClick={startVoiceCapture} type="button"><Mic size={16} />Start voice capture</button>
+          <div className={`voice-capture${isListening ? " is-listening" : ""}${captureFinished && !isListening ? " is-finished" : ""}`}>
+            <div className="voice-capture-status" aria-live="polite">
+              <span className="voice-status-icon">
+                {isListening ? <span className="voice-recording-dot" /> : captureFinished ? <Check size={17} /> : <Mic size={17} />}
+              </span>
+              <div>
+                <strong>{isListening ? "Listening to your voice" : captureFinished ? "Capture stopped" : "Ready when you are"}</strong>
+                <span>{isListening ? "Speak clearly. Your words will appear below." : captureFinished ? "Review the transcript, then parse it into a todo." : "Press the microphone to start voice capture."}</span>
+              </div>
+              {isListening && <div aria-hidden="true" className="voice-wave"><i /><i /><i /><i /><i /><i /><i /></div>}
+            </div>
+            <button
+              aria-pressed={isListening}
+              className={isListening ? "voice-stop-button" : "voice-start-button"}
+              onClick={isListening ? stopVoiceCapture : startVoiceCapture}
+              type="button"
+            >
+              {isListening ? <><Square fill="currentColor" size={15} />Stop listening</> : <><Mic size={17} />Start voice capture</>}
+            </button>
+          </div>
           <form className="ai-form" onSubmit={parseTranscript}>
-            <label htmlFor="voice-transcript">Transcript</label>
-            <textarea id="voice-transcript" maxLength={500} onChange={(event) => setTranscript(event.target.value)} placeholder="Tomorrow 5 PM submit Maths assignment" value={transcript} />
-            <button className="primary-button" disabled={!settings.configured || !transcript.trim() || Boolean(busy)} type="submit">{busy === "voice" ? "Parsing…" : "Parse with AI"}</button>
+            <label htmlFor="voice-transcript">Transcript <span className="optional">{isListening ? "· listening live" : "· editable"}</span></label>
+            <textarea
+              aria-describedby="voice-capture-hint"
+              aria-label="Voice transcript, editable"
+              id="voice-transcript"
+              maxLength={500}
+              onChange={(event) => {
+                setTranscript(event.target.value);
+                finalTranscriptRef.current = event.target.value;
+              }}
+              placeholder="Example: Tomorrow at 5 PM, submit Maths assignment"
+              value={`${transcript}${interimTranscript ? `${transcript.trim() ? " " : ""}${interimTranscript}` : ""}`}
+            />
+            <span className="voice-capture-hint" id="voice-capture-hint">{isListening ? "Your speech is being detected. Select Stop listening when finished." : "Check or edit the transcript before asking AI to parse it."}</span>
+            <button className="primary-button" disabled={isListening || !settings.configured || !transcript.trim() || Boolean(busy)} type="submit">{busy === "voice" ? "Parsing…" : "Parse with AI"}</button>
           </form>
           {voiceDraft && <div className="ai-review">
             <h3>Review before creating</h3>
