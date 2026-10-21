@@ -10,6 +10,7 @@ import notificationRoutes from "./routes/notifications.js";
 import friendRoutes from "./routes/friends.js";
 import teacherAuditRoutes from "./routes/teacherAudit.js";
 import productivityRoutes from "./routes/productivity.js";
+import aiRoutes from "./routes/ai.js";
 import { errorHandler, notFound } from "./middleware/errors.js";
 
 const app = express();
@@ -30,6 +31,7 @@ app.use("/api/notifications", notificationRoutes);
 app.use("/api/friends", friendRoutes);
 app.use("/api/teacher-audit", teacherAuditRoutes);
 app.use("/api/productivity", productivityRoutes);
+app.use("/api/ai", aiRoutes);
 app.use(notFound);
 app.use(errorHandler);
 

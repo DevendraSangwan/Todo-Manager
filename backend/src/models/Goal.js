@@ -8,6 +8,7 @@ const goalSchema = new mongoose.Schema(
     targetDate: { type: Date, default: null },
     milestones: [{
       title: { type: String, required: true, trim: true, maxlength: 120 },
+      targetDate: { type: Date, default: null },
       completed: { type: Boolean, default: false },
       completedAt: { type: Date, default: null }
     }]

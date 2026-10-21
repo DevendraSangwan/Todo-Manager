@@ -11,7 +11,7 @@ export async function requireAuth(req, res, next) {
 
     const payload = jwt.verify(token, process.env.JWT_SECRET);
     let user = await User.findById(payload.sub).select(
-      "_id email role accountType setupComplete classId chronotype dailyGoalHours interests leaderboardOptIn xp currentStreak bestStreak lastStreakDate focusSettings"
+      "_id email role accountType setupComplete classId chronotype dailyGoalHours interests leaderboardOptIn aiAlwaysAllowActions xp currentStreak bestStreak lastStreakDate focusSettings"
     );
     if (!user) {
       return res.status(401).json({ message: "Your session is no longer valid." });
@@ -23,7 +23,7 @@ export async function requireAuth(req, res, next) {
         user._id,
         { $set: { role: "SUPER_ADMIN", accountType: "personal", setupComplete: true, classId: null } },
         { new: true, runValidators: true }
-      ).select("_id email role accountType setupComplete classId chronotype dailyGoalHours interests leaderboardOptIn xp currentStreak bestStreak lastStreakDate focusSettings");
+      ).select("_id email role accountType setupComplete classId chronotype dailyGoalHours interests leaderboardOptIn aiAlwaysAllowActions xp currentStreak bestStreak lastStreakDate focusSettings");
     }
 
     req.user = user;

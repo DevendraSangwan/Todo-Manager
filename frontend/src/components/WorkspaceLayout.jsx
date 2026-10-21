@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import {
   Archive, CalendarDays, CheckSquare2, ClipboardList, Flame, FolderKanban, GraduationCap,
-  LayoutDashboard, LogOut, Menu, Moon, Network, ShieldCheck, Sun, Target, Users, X
+  LayoutDashboard, LogOut, Menu, Moon, Network, ShieldCheck, Sparkles, Sun, Target, Users, X
 } from "lucide-react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext.jsx";
@@ -14,6 +14,7 @@ const mainLinks = [
 ];
 
 const planningLinks = [
+  { to: "/ai", label: "AI study space", icon: Sparkles },
   { to: "/goals", label: "Goals & habits", icon: Target },
   { to: "/categories", label: "Categories", icon: FolderKanban }
 ];

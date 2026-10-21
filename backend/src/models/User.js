@@ -26,6 +26,11 @@ const userSchema = new mongoose.Schema(
     chronotype: { type: String, enum: ["morning", "night"], default: null },
     dailyGoalHours: { type: Number, min: 0.5, max: 16, default: 2 },
     interests: { type: [String], default: [] },
+    aiAlwaysAllowActions: {
+      type: [String],
+      enum: ["add_todo", "move_todo"],
+      default: []
+    },
     leaderboardOptIn: { type: Boolean, default: false },
     xp: { type: Number, min: 0, default: 0 },
     currentStreak: { type: Number, min: 0, default: 0 },

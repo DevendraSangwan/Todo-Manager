@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext.jsx";
 import { api } from "../lib/api.js";
 import WorkspaceLayout from "../components/WorkspaceLayout.jsx";
+import AISuggestionsCard from "../components/AISuggestionsCard.jsx";
 
 function Phase4Shell({ title, children }) {
   return (
@@ -102,6 +103,7 @@ export function MyDayPage() {
         </div>
       </section>
       {error && <ErrorMessage>{error}</ErrorMessage>}
+      <AISuggestionsCard onApplied={load} />
       <div className="myday-grid">
         <section className="phase-card">
           <h2>Today's tasks</h2>
@@ -430,7 +432,10 @@ export function GoalsPage() {
                   await load();
                 } catch (requestError) { setError(requestError.message); }
               }} type="checkbox" />
-              <span className={milestone.completed ? "subtask-complete" : ""}>{milestone.title}</span>
+              <span className={milestone.completed ? "subtask-complete" : ""}>
+                {milestone.title}
+                {milestone.targetDate && <small className="milestone-target"> · due {new Date(milestone.targetDate).toLocaleDateString()}</small>}
+              </span>
             </label>)}
             {!goal.milestones.length && <p className="phase-empty">Add milestones when you are ready to break this goal into steps.</p>}
           </article>;

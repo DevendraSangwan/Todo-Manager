@@ -89,4 +89,14 @@ List APIs accept `page`, `limit`, optional `status`, and optional `date=YYYY-MM-
 - Students, teachers, and super-admins all have private My Day, Todos, Focus, Goals & habits, Categories, Calendar, Matrix, Reports, and Trash pages; teacher/admin management panels are separate sidebar destinations.
 - Phase 4 APIs live under `/api/productivity`; all endpoints require authentication and keep profile, goals, habits, categories, sessions, and streak data scoped to the current user.
 - No AI API integrations or calls are included.
+
+## Phase 5 — AI study space
+
+- The **AI study space** is available to students, teachers, and super-admins. It includes private-task suggestions, reviewed task breakdowns, task chat, goal plans, speech-to-todo parsing, postponement-based rescheduling ideas, and a weekly productivity report.
+- Configure `GEMINI_API_KEY` in the root `.env` file on the backend only. `GEMINI_MODEL` is optional and defaults to `gemini-2.5-flash`. Never add the key to Vite/frontend variables or browser code. If the key is unset, AI endpoints return an explicit unavailable response.
+- AI requests are made by the Express backend. Personal task data sent to Gemini is selected only from records owned by the authenticated account; task chat does not use classmates' or teacher-managed task records. Voice capture uses browser speech recognition, then sends the transcript to the backend only after the user requests parsing.
+- AI generation endpoints are limited to 30 requests per 15 minutes per client IP.
+- AI-generated task changes are drafts. Additions and date/priority changes show an exact preview and require approval unless the user has enabled the matching, revocable **AI Permissions** setting. Applied changes can be undone from the review card; move history records old and new values.
+- Breakdowns, generated goal plans, and voice drafts are reviewed before saving. Weekly reports disclose when there is insufficient completed-task data.
+- Run verification with `cd backend && npm test` and `cd frontend && npm run build`.
 # Todo-Manager
