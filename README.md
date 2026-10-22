@@ -31,6 +31,16 @@ A MERN todo app with email/password registration, cookie-based JWT login, privat
 
 The backend listens on port `5000` by default. The browser communicates with it through the frontend Vite `/api` proxy, and the JWT is stored only in an HTTP-only cookie. Mongoose writes app data into the `Todo_manager` database. The root `.env` is ignored by Git; `.env.example` documents the required variables. Set `SUPER_ADMIN_EMAILS` to the email address(es) that should receive the `SUPER_ADMIN` role. A new account registered with that email is made a super-admin, and an existing account is promoted after its next successful login. No client request can grant elevated roles.
 
+## Demo seed data
+
+To add sample verified accounts and classrooms to the MongoDB database configured in the root `.env`, set `SEED_DEMO_DATA=true`. Then run:
+
+```sh
+cd backend && npm run seed:demo
+```
+
+This creates one super-admin, two teachers, three students, and two classes, plus private student todos, study categories, goals, habits, assignments, sample submissions, and class announcements. All accounts are marked email-verified directly in MongoDB; the script does not send verification emails. The operation is idempotent and updates passwords for these demo accounts each time it runs. The accounts are `admin@gmail.com` (`admin123`), `teacher1@gmail.com` and `teacher2@gmail.com` (both `12345678`), and `student1@gmail.com`, `student2@gmail.com`, and `student3@gmail.com` (all `12345678`). These are intentionally simple local-demo credentials; do not use them outside local testing. The script refuses to run when `NODE_ENV=production`; never run demo seed data against a production database. Set `SEED_DEMO_DATA=false` again when you are done seeding. Existing older demo users are not deleted.
+
 The project code is split into `backend/` (Express API and MongoDB models) and `frontend/` (React/Vite app). Start each in a separate terminal from the project root:
 
 ```sh
@@ -80,6 +90,7 @@ List APIs accept `page`, `limit`, optional `status`, and optional `date=YYYY-MM-
 ## Phase 6 — Security, settings, and classroom tools
 
 - Accounts must verify their email before login. The email link opens a confirmation page; the user explicitly confirms there, so mail-link preview scanners do not consume the one-time token. Existing accounts without a verification flag must use **Resend verification email** on the login page after deployment. Password reset and verification links are single-use and expire after one hour and 24 hours, respectively. Configure `SMTP_HOST`, `SMTP_PORT`, optional `SMTP_USER`/`SMTP_PASSWORD`, `SMTP_SECURE`, and `SMTP_FROM` in the root `.env`; set `APP_URL` to the public frontend URL. Registration is unavailable until SMTP host and sender are configured. Previously issued JWT cookies are invalidated by the server-side session requirement, so users must log in again.
+- For local development, restart the backend after pulling or changing auth code so the email-verification API route is loaded. From the project root, run `cd backend && npm run dev` in one terminal and `cd frontend && npm run dev` in another; open the Vite URL (normally `http://localhost:5173`). On the login page, choose **Resend verification email**, open the newest email, and click **Verify my email** on the confirmation page. A `404` from `/api/auth/verify-email` usually means the frontend is reaching an old or incorrectly started backend; confirm the backend reports `API listening on port 5000`. A `403` from login means the account is still unverified; request a fresh link and complete the confirmation step. Do not share `.env` contents or email credentials when asking for help.
 - Sessions are stored server-side and tied to signed, HTTP-only JWT cookies. Settings shows active sessions and can revoke every other device. In development, authentication limits reset every minute (10 login attempts, or 5 other actions per IP) for easier local testing. Production keeps the 15-minute window.
 - Settings supports display name, theme, timezone, in-app/email/browser notification preferences, reminders, AI data permission, and reduced motion. Email reminders are processed by the running backend and require SMTP. Browser reminders run while the workspace is open and require browser permission.
 - **Download my data** exports the authenticated user's profile, tasks, task history, goals, habits, categories, productivity records, focus sessions, saved filters, AI actions, notifications, access requests, assignment submissions, and authored classroom content as CSV or PDF. Other students' IDs are omitted from authored assignment exports. Account deletion requires the current password and typing `DELETE`; super-admin accounts cannot be removed through this endpoint.
