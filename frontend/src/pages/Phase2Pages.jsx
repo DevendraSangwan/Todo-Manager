@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext.jsx";
 import { api } from "../lib/api.js";
+import { formatUserDate, formatUserDateTime } from "../lib/date.js";
 import WorkspaceLayout from "../components/WorkspaceLayout.jsx";
 
 function PageShell({ title, children }) {
@@ -114,6 +115,7 @@ export function AdminPage() {
   const [classes, setClasses] = useState([]);
   const [teachers, setTeachers] = useState([]);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
   const [teacherForm, setTeacherForm] = useState({ email: "", password: "" });
   const [classForm, setClassForm] = useState({ name: "", description: "", teacherId: "" });
 
@@ -133,8 +135,9 @@ export function AdminPage() {
   async function createTeacher(event) {
     event.preventDefault();
     try {
-      await api("/admin/teachers", { method: "POST", body: JSON.stringify(teacherForm) });
+      const result = await api("/admin/teachers", { method: "POST", body: JSON.stringify(teacherForm) });
       setTeacherForm({ email: "", password: "" });
+      setNotice(result.message);
       await load();
     } catch (requestError) { setError(requestError.message); }
   }
@@ -192,6 +195,7 @@ export function AdminPage() {
   return (
     <PageShell title="Super admin">
       <ErrorMessage>{error}</ErrorMessage>
+      {notice && <p className="form-success" role="status">{notice}</p>}
       <section className="phase-card">
         <h2>Teachers</h2>
         <form className="phase-form" onSubmit={createTeacher}>
@@ -205,6 +209,7 @@ export function AdminPage() {
               <input aria-label="Teacher email" defaultValue={teacher.email} name="email" type="email" required />
               <input aria-label="New password (optional)" name="password" minLength={8} placeholder="New password (optional)" type="password" />
               <span>{teacher.class?.name ?? "Unassigned"}</span>
+              <span>{teacher.emailVerified ? "Verified" : "Verification pending"}</span>
               <button className="text-button" type="submit">Save</button>
               <button className="text-button danger-text" onClick={() => deleteTeacher(teacher._id)} type="button">Delete</button>
             </form>
@@ -372,7 +377,7 @@ export function ClassmatesPage() {
         {result.todos.map((todo) => (
           <article className="phase-row" key={todo._id}>
             <div><strong>{todo.title}</strong><span className="phase-subline">{todo.userId?.email} · {todo.visibility}</span></div>
-            <span>{new Date(todo.dueDate).toLocaleDateString()}</span>
+            <span>{formatUserDate(todo.dueDate)}</span>
           </article>
         ))}
         {!result.todos.length && <p className="phase-empty">No classmates’ todos have been shared.</p>}
@@ -447,7 +452,7 @@ export function FriendsPage() {
           {friends.map((friend) => <button className={friendId === friend._id ? "selected" : ""} key={friend._id} onClick={() => viewFriend(friend._id)} type="button">{friend.email}</button>)}
           {!friends.length && <p className="phase-empty">Approved friend access will appear here.</p>}
         </div>
-        {todos.map((todo) => <article className="phase-row" key={todo._id}><strong>{todo.title}</strong><span>{new Date(todo.dueDate).toLocaleDateString()}</span></article>)}
+        {todos.map((todo) => <article className="phase-row" key={todo._id}><strong>{todo.title}</strong><span>{formatUserDate(todo.dueDate)}</span></article>)}
       </section>
     </PageShell>
   );
@@ -508,7 +513,7 @@ export function NotificationsPage() {
           <span>{answer.kind === "join_class" ? `${answer.classId?.name ?? "Class"} join request` : `Friend access · ${answer.recipientId?.email ?? answer.requesterId?.email}`}</span>
           <strong className={`status-${answer.status}`}>{answer.status}</strong>
         </p>)}
-        {messages.map((item) => <p className="phase-row" key={item._id}><span>{item.senderId?.email}: {item.message}</span><span>{new Date(item.createdAt).toLocaleString()}</span></p>)}
+        {messages.map((item) => <p className="phase-row" key={item._id}><span>{item.senderId?.email}: {item.message}</span><span>{formatUserDateTime(item.createdAt)}</span></p>)}
         {!answers.length && !messages.length && <p className="phase-empty">No answers or messages yet.</p>}
       </section>
       <section className="phase-card">

@@ -4,6 +4,9 @@ import Class from "../models/Class.js";
 import Todo from "../models/Todo.js";
 import User from "../models/User.js";
 import AccessRequest from "../models/AccessRequest.js";
+import Announcement from "../models/Announcement.js";
+import Assignment from "../models/Assignment.js";
+import AssignmentSubmission from "../models/AssignmentSubmission.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
 import { parsePagination } from "../middleware/pagination.js";
 
@@ -179,6 +182,11 @@ router.delete("/:id", requireRole("SUPER_ADMIN"), async (req, res, next) => {
     if (!classroom) return res.status(404).json({ message: "Class not found." });
     await User.updateMany({ classId: classroom._id }, { $set: { classId: null } });
     await Todo.updateMany({ classId: classroom._id }, { $set: { classId: null } });
+    await Promise.all([
+      AssignmentSubmission.deleteMany({ classId: classroom._id }),
+      Assignment.deleteMany({ classId: classroom._id }),
+      Announcement.deleteMany({ classId: classroom._id })
+    ]);
     await AccessRequest.deleteMany({ classId: classroom._id });
     return res.json({ message: "Class deleted." });
   } catch (error) {

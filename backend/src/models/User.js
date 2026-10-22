@@ -9,7 +9,19 @@ const userSchema = new mongoose.Schema(
       lowercase: true,
       trim: true
     },
+    emailVerified: { type: Boolean, default: false },
     password: { type: String, required: true, select: false },
+    displayName: { type: String, trim: true, maxlength: 80, default: "" },
+    theme: { type: String, enum: ["light", "dark"], default: "light" },
+    timezone: { type: String, trim: true, maxlength: 80, default: "UTC" },
+    notificationPreferences: {
+      inApp: { type: Boolean, default: true },
+      email: { type: Boolean, default: false },
+      browser: { type: Boolean, default: false }
+    },
+    reminderMinutes: { type: Number, enum: [0, 5, 10, 15, 30, 60], default: 15 },
+    aiDataPermission: { type: Boolean, default: true },
+    reducedMotion: { type: Boolean, default: false },
     role: {
       type: String,
       enum: ["STUDENT", "TEACHER_ADMIN", "SUPER_ADMIN"],

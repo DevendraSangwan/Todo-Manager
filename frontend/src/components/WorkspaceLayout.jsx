@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 import {
   Archive, CalendarDays, CheckSquare2, ClipboardList, Flame, FolderKanban, GraduationCap,
-  LayoutDashboard, LogOut, Menu, Moon, Network, ShieldCheck, Sparkles, Sun, Target, Users, X
+  LayoutDashboard, LogOut, Menu, Moon, Network, Settings, ShieldCheck, Sparkles, Sun, Target, Users, X
 } from "lucide-react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext.jsx";
 import { api } from "../lib/api.js";
+import { formatUserDate } from "../lib/date.js";
 
 const mainLinks = [
   { to: "/dashboard", label: "My Day", icon: LayoutDashboard },
@@ -50,23 +51,39 @@ export default function WorkspaceLayout({ children }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [theme, setTheme] = useState(() => localStorage.getItem("daymark-theme") ?? "light");
   const [error, setError] = useState("");
+  const [showShortcuts, setShowShortcuts] = useState(false);
+  const [reminderMessage, setReminderMessage] = useState("");
 
   useEffect(() => {
+    if (user?.theme) {
+      setTheme(user.theme);
+      localStorage.setItem("daymark-theme", user.theme);
+    }
     document.documentElement.dataset.theme = theme;
-  }, [theme]);
+    document.documentElement.dataset.motion = user?.reducedMotion ? "reduced" : "normal";
+    document.documentElement.dataset.timezone = user?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if (user?.timezone) localStorage.setItem("daymark-timezone", user.timezone);
+  }, [theme, user?.theme, user?.reducedMotion]);
 
-  function changeTheme() {
-    setTheme((current) => {
-      const next = current === "light" ? "dark" : "light";
-      document.documentElement.dataset.theme = next;
-      localStorage.setItem("daymark-theme", next);
-      return next;
-    });
+  async function changeTheme() {
+    const next = theme === "light" ? "dark" : "light";
+    setError("");
+    try {
+      const { user: updatedUser } = await api("/settings", {
+        method: "PATCH",
+        body: JSON.stringify({ theme: next })
+      });
+      setUser(updatedUser);
+      setTheme(next);
+    } catch (requestError) {
+      setError(requestError.message);
+    }
   }
 
   async function logout() {
     try {
       await api("/auth/logout", { method: "POST" });
+      localStorage.removeItem("daymark-timezone");
       setUser(null);
       navigate("/login", { replace: true });
     } catch (requestError) {
@@ -74,14 +91,73 @@ export default function WorkspaceLayout({ children }) {
     }
   }
 
+  useEffect(() => {
+    function onKeyDown(event) {
+      const target = event.target;
+      const typing = target instanceof HTMLElement &&
+        (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName));
+      if (typing || event.altKey || event.ctrlKey || event.metaKey) return;
+      if (event.key === "?") {
+        setShowShortcuts(true);
+        return;
+      }
+      if (event.key === "Escape") {
+        setShowShortcuts(false);
+        return;
+      }
+      if (event.key === "g") {
+        window.sessionStorage.setItem("daymark-shortcut-prefix", "g");
+        window.setTimeout(() => window.sessionStorage.removeItem("daymark-shortcut-prefix"), 1200);
+        return;
+      }
+      if (window.sessionStorage.getItem("daymark-shortcut-prefix") === "g") {
+        window.sessionStorage.removeItem("daymark-shortcut-prefix");
+        const destinations = { d: "/dashboard", t: "/todos", s: "/settings" };
+        if (destinations[event.key]) navigate(destinations[event.key]);
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [navigate]);
+
+  useEffect(() => {
+    if (!user?.notificationPreferences?.browser || user.reminderMinutes < 1) return undefined;
+    let active = true;
+    async function checkReminders() {
+      try {
+        const { todos } = await api("/todos/reminders/due");
+        if (!active) return;
+        for (const todo of todos) {
+          const key = `daymark-reminder-${todo._id}-${new Date(todo.dueDate).getTime()}`;
+          if (localStorage.getItem(key)) continue;
+          localStorage.setItem(key, "sent");
+          if ("Notification" in window && Notification.permission === "granted") {
+            new Notification("Task due soon", { body: todo.title, tag: key });
+          }
+          if (user.notificationPreferences.inApp) setReminderMessage(`Reminder: “${todo.title}” is due soon.`);
+        }
+      } catch (requestError) {
+        if (active) setError(requestError.message);
+      }
+    }
+    checkReminders();
+    const interval = window.setInterval(checkReminders, 60_000);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+    };
+  }, [user?.id, user?.notificationPreferences?.browser, user?.notificationPreferences?.inApp, user?.reminderMinutes]);
+
   const studentLinks = [
     ...(user?.classId ? [{ to: "/classmates", label: "Classmates", icon: GraduationCap }] : []),
+    ...(user?.classId ? [{ to: "/classroom", label: "Classroom", icon: ClipboardList }] : []),
     { to: "/friends", label: "Friends", icon: Users },
     { to: "/notifications", label: "Notifications", icon: ClipboardList }
   ];
   const adminLinks = [
     ...(user?.role === "SUPER_ADMIN" ? [{ to: "/admin", label: "Admin panel", icon: ShieldCheck }] : []),
     ...(user?.role === "TEACHER_ADMIN" ? [
+      { to: "/classroom", label: "Classroom", icon: GraduationCap },
       { to: "/teacher", label: "Teacher panel", icon: GraduationCap },
       { to: "/teacher/audit", label: "Audit log", icon: ClipboardList }
     ] : [])
@@ -107,9 +183,11 @@ export default function WorkspaceLayout({ children }) {
           {adminLinks.length > 0 && <NavigationGroup label="MANAGE" links={adminLinks} onNavigate={() => setMobileOpen(false)} />}
         </nav>
 
+        <NavigationGroup label="ACCOUNT" links={[{ to: "/settings", label: "Settings", icon: Settings }]} onNavigate={() => setMobileOpen(false)} />
+
         <div className="sidebar-account">
           <span aria-hidden="true" className="account-avatar">{user?.email?.[0]?.toUpperCase() ?? "D"}</span>
-          <span className="account-details"><strong>{user?.email?.split("@")[0] ?? "Student"}</strong><small>{user?.role === "STUDENT" ? "Student workspace" : user?.role?.replace("_", " ")}</small></span>
+          <span className="account-details"><strong>{user?.displayName || user?.email?.split("@")[0] || "Student"}</strong><small>{user?.role === "STUDENT" ? "Student workspace" : user?.role?.replace("_", " ")}</small></span>
           <button aria-label="Log out" className="account-logout" onClick={logout} title="Log out" type="button"><LogOut size={16} /></button>
         </div>
       </aside>
@@ -121,7 +199,7 @@ export default function WorkspaceLayout({ children }) {
           </button>
           <span className="topbar-context">DAYMARK <span>/</span> YOUR WORKSPACE</span>
           <div className="workspace-topbar-actions">
-            <span className="workspace-date">{new Intl.DateTimeFormat(undefined, { weekday: "short", month: "short", day: "numeric" }).format(new Date())}</span>
+            <span className="workspace-date">{formatUserDate(new Date())}</span>
             <button aria-label={`Switch to ${theme === "light" ? "dark" : "light"} mode`} className="icon-button" onClick={changeTheme} title="Toggle theme" type="button">
               {theme === "light" ? <Moon size={17} /> : <Sun size={17} />}
             </button>
@@ -129,9 +207,20 @@ export default function WorkspaceLayout({ children }) {
         </header>
         <div className="workspace-main">
           {error && <p className="inline-error" role="alert">{error}</p>}
+          {reminderMessage && <div aria-live="polite" className="reminder-banner" role="status">{reminderMessage}<button aria-label="Dismiss reminder" onClick={() => setReminderMessage("")} type="button"><X size={15} /></button></div>}
           {children}
         </div>
       </div>
+      {showShortcuts && <div className="shortcut-backdrop" onClick={() => setShowShortcuts(false)} role="presentation">
+        <section aria-labelledby="shortcut-title" aria-modal="true" className="shortcut-dialog" onClick={(event) => event.stopPropagation()} role="dialog">
+          <button aria-label="Close keyboard shortcuts" className="shortcut-close" onClick={() => setShowShortcuts(false)} type="button"><X size={18} /></button>
+          <h2 id="shortcut-title">Keyboard shortcuts</h2>
+          <p><kbd>g</kbd> then <kbd>d</kbd> <span>Go to My Day</span></p>
+          <p><kbd>g</kbd> then <kbd>t</kbd> <span>Go to tasks</span></p>
+          <p><kbd>g</kbd> then <kbd>s</kbd> <span>Go to settings</span></p>
+          <p><kbd>Esc</kbd> <span>Close this dialog</span></p>
+        </section>
+      </div>}
     </div>
   );
 }

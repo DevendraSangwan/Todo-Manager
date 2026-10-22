@@ -10,6 +10,8 @@ import {
   AdminPage, ClassmatesPage, FriendsPage, NotificationsPage, OnboardingPage, TeacherPage
 } from "./pages/Phase2Pages.jsx";
 import { useAuth } from "./context/AuthContext.jsx";
+import { SettingsPage, ClassroomPage } from "./pages/Phase6Pages.jsx";
+import { ForgotPasswordPage, ResetPasswordPage, VerifyEmailPage } from "./pages/SecurityPages.jsx";
 
 function ProtectedRoute({ children, roles, allowSetup = false }) {
   const { user, checking } = useAuth();
@@ -43,6 +45,9 @@ export default function App() {
         path="/register"
         element={!checking && user ? <Navigate to={destination(user)} replace /> : <AuthPage mode="register" />}
       />
+      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+      <Route path="/reset-password" element={<ResetPasswordPage />} />
+      <Route path="/verify-email" element={<VerifyEmailPage />} />
       <Route
         path="/dashboard"
         element={<ProtectedRoute><MyDayPage /></ProtectedRoute>}
@@ -63,6 +68,8 @@ export default function App() {
       <Route path="/classmates" element={<ProtectedRoute><ClassmatesPage /></ProtectedRoute>} />
       <Route path="/friends" element={<ProtectedRoute><FriendsPage /></ProtectedRoute>} />
       <Route path="/notifications" element={<ProtectedRoute><NotificationsPage /></ProtectedRoute>} />
+      <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
+      <Route path="/classroom" element={<ProtectedRoute><ClassroomPage /></ProtectedRoute>} />
       <Route path="*" element={<Navigate to={destination(user)} replace />} />
     </Routes>
   );

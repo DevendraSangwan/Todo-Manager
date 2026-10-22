@@ -6,6 +6,7 @@ import {
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext.jsx";
 import { api } from "../lib/api.js";
+import { formatUserDate, formatUserDateTime } from "../lib/date.js";
 import WorkspaceLayout from "../components/WorkspaceLayout.jsx";
 
 const tabs = [
@@ -115,7 +116,7 @@ export default function Dashboard() {
 
   const groupedTodos = useMemo(() => {
     return todos.reduce((groups, todo) => {
-      const key = new Date(todo.dueDate).toLocaleDateString();
+      const key = formatUserDate(todo.dueDate);
       groups[key] ??= [];
       groups[key].push(todo);
       return groups;
@@ -419,7 +420,7 @@ export default function Dashboard() {
                                 {todo.completionNote && <p className="completion-note">Note: {todo.completionNote}</p>}
                                 <button className="text-button history-button" onClick={() => showHistory(todo._id)} type="button"><History size={13} />{historyTodo === todo._id ? "Hide history" : "History"}</button>
                                 {historyTodo === todo._id && <div className="history-list">
-                                  {historyEntries.map((entry) => <div key={entry._id}><strong>{entry.action}</strong> · {new Date(entry.createdAt).toLocaleString()}
+                                  {historyEntries.map((entry) => <div key={entry._id}><strong>{entry.action}</strong> · {formatUserDateTime(entry.createdAt)}
                                     {entry.changes.map((change, index) => <span key={`${change.field}-${index}`}>{change.field}: {String(change.oldValue ?? "—")} → {String(change.newValue ?? "—")}</span>)}
                                   </div>)}
                                 </div>}

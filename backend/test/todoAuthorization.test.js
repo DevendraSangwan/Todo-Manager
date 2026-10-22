@@ -4,6 +4,7 @@ import jwt from "jsonwebtoken";
 import app from "../src/app.js";
 import Todo from "../src/models/Todo.js";
 import User from "../src/models/User.js";
+import Session from "../src/models/Session.js";
 
 const secret = "phase-two-test-secret-with-at-least-32-characters";
 const studentId = "66a000000000000000000001";
@@ -23,12 +24,15 @@ let originalFindUser;
 let originalFindTodo;
 let originalAggregate;
 let originalCountDocuments;
+let originalSessionExists;
 let token;
 
 before(async () => {
   process.env.JWT_SECRET = secret;
-  token = jwt.sign({ sub: studentId }, secret);
+  token = jwt.sign({ sub: studentId, jti: "todo-test-session" }, secret);
   originalFindUser = User.findById;
+  originalSessionExists = Session.exists;
+  Session.exists = async () => ({ _id: "todo-test-session" });
   originalFindTodo = Todo.findById;
   originalAggregate = Todo.aggregate;
   originalCountDocuments = Todo.countDocuments;
@@ -53,6 +57,7 @@ before(async () => {
 
 after(async () => {
   User.findById = originalFindUser;
+  Session.exists = originalSessionExists;
   Todo.findById = originalFindTodo;
   Todo.aggregate = originalAggregate;
   Todo.countDocuments = originalCountDocuments;

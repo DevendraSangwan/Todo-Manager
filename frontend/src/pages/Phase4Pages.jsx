@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext.jsx";
 import { api } from "../lib/api.js";
+import { formatUserDate } from "../lib/date.js";
 import WorkspaceLayout from "../components/WorkspaceLayout.jsx";
 import AISuggestionsCard from "../components/AISuggestionsCard.jsx";
 
@@ -420,7 +421,7 @@ export function GoalsPage() {
               try { await api(`/productivity/goals/${goal._id}`, { method: "DELETE" }); await load(); }
               catch (requestError) { setError(requestError.message); }
             }} type="button">Delete</button></div>
-            {goal.targetDate && <p className="muted-copy">Target: {new Date(goal.targetDate).toLocaleDateString()}</p>}
+            {goal.targetDate && <p className="muted-copy">Target: {formatUserDate(goal.targetDate)}</p>}
             <div className="progress-track"><span style={{ width: `${progress}%` }} /></div>
             <p className="muted-copy">{done} of {goal.milestones.length} milestones · {progress}%</p>
             {goal.milestones.map((milestone, index) => <label className="phase-row habit-row" key={`${goal._id}-${index}`}>
@@ -434,7 +435,7 @@ export function GoalsPage() {
               }} type="checkbox" />
               <span className={milestone.completed ? "subtask-complete" : ""}>
                 {milestone.title}
-                {milestone.targetDate && <small className="milestone-target"> · due {new Date(milestone.targetDate).toLocaleDateString()}</small>}
+                {milestone.targetDate && <small className="milestone-target"> · due {formatUserDate(milestone.targetDate)}</small>}
               </span>
             </label>)}
             {!goal.milestones.length && <p className="phase-empty">Add milestones when you are ready to break this goal into steps.</p>}

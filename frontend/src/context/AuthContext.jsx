@@ -9,7 +9,10 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     api("/auth/me")
-      .then(({ user: currentUser }) => setUser(currentUser))
+      .then(({ user: currentUser }) => {
+        if (currentUser.timezone) localStorage.setItem("daymark-timezone", currentUser.timezone);
+        setUser(currentUser);
+      })
       .catch((error) => {
         if (error.status !== 401) console.error(error);
         setUser(null);

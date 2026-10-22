@@ -77,6 +77,16 @@ List APIs accept `page`, `limit`, optional `status`, and optional `date=YYYY-MM-
 - Daily reports are available at `GET /api/todos/reports/daily?date=YYYY-MM-DD`; saved filters are private to the authenticated user. The calendar and matrix APIs also return only the authenticated user's active todos.
 - Run verification with `cd backend && npm test` and `cd frontend && npm run build`.
 
+## Phase 6 — Security, settings, and classroom tools
+
+- Accounts must verify their email before login. The email link opens a confirmation page; the user explicitly confirms there, so mail-link preview scanners do not consume the one-time token. Existing accounts without a verification flag must use **Resend verification email** on the login page after deployment. Password reset and verification links are single-use and expire after one hour and 24 hours, respectively. Configure `SMTP_HOST`, `SMTP_PORT`, optional `SMTP_USER`/`SMTP_PASSWORD`, `SMTP_SECURE`, and `SMTP_FROM` in the root `.env`; set `APP_URL` to the public frontend URL. Registration is unavailable until SMTP host and sender are configured. Previously issued JWT cookies are invalidated by the server-side session requirement, so users must log in again.
+- Sessions are stored server-side and tied to signed, HTTP-only JWT cookies. Settings shows active sessions and can revoke every other device. In development, authentication limits reset every minute (10 login attempts, or 5 other actions per IP) for easier local testing. Production keeps the 15-minute window.
+- Settings supports display name, theme, timezone, in-app/email/browser notification preferences, reminders, AI data permission, and reduced motion. Email reminders are processed by the running backend and require SMTP. Browser reminders run while the workspace is open and require browser permission.
+- **Download my data** exports the authenticated user's profile, tasks, task history, goals, habits, categories, productivity records, focus sessions, saved filters, AI actions, notifications, access requests, assignment submissions, and authored classroom content as CSV or PDF. Other students' IDs are omitted from authored assignment exports. Account deletion requires the current password and typing `DELETE`; super-admin accounts cannot be removed through this endpoint.
+- Teachers can create assignments for their whole class or selected enrolled students, review submission timestamps and late status, publish class announcements, and see assignment completion, overdue counts, and a seven-day submission trend. Classroom analytics only use assignment and submission records; private personal todos are not queried. Students can only read and submit their own class assignments.
+- Keyboard shortcuts are shown with `?`: `g` then `d` opens My Day, `g` then `t` opens tasks, and `g` then `s` opens Settings. Reduced-motion can be enabled in Settings and works with the operating-system preference.
+- Run the backend permission/privacy tests with `cd backend && npm test` and verify the frontend with `cd frontend && npm run build`.
+
 ## Phase 4
 
 - **My Day** is the default student dashboard. It shows today's and overdue todos, the top three priorities, daily completion progress, habits, category progress, XP, and the current streak.

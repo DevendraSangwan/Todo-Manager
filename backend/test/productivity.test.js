@@ -5,6 +5,7 @@ import app from "../src/app.js";
 import DailyProductivity from "../src/models/DailyProductivity.js";
 import Todo from "../src/models/Todo.js";
 import User from "../src/models/User.js";
+import Session from "../src/models/Session.js";
 import { updateDailyProductivity } from "../src/utils/productivity.js";
 
 const secret = "phase-four-test-secret-with-at-least-32-characters";
@@ -12,12 +13,15 @@ const studentId = "66a000000000000000000011";
 let server;
 let baseUrl;
 let originalFindUser;
+let originalSessionExists;
 let token;
 
 before(async () => {
   process.env.JWT_SECRET = secret;
-  token = jwt.sign({ sub: studentId }, secret);
+  token = jwt.sign({ sub: studentId, jti: "productivity-test-session" }, secret);
   originalFindUser = User.findById;
+  originalSessionExists = Session.exists;
+  Session.exists = async () => ({ _id: "productivity-test-session" });
   User.findById = () => ({
     select: async () => ({
       id: studentId,
@@ -36,6 +40,7 @@ before(async () => {
 
 after(async () => {
   User.findById = originalFindUser;
+  Session.exists = originalSessionExists;
   await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
 });
 

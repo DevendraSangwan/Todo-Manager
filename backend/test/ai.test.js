@@ -4,6 +4,7 @@ import jwt from "jsonwebtoken";
 import app from "../src/app.js";
 import Todo from "../src/models/Todo.js";
 import User from "../src/models/User.js";
+import Session from "../src/models/Session.js";
 
 const secret = "phase-five-test-secret-with-at-least-32-characters";
 const userId = "66a000000000000000000051";
@@ -11,14 +12,18 @@ let server;
 let baseUrl;
 let originalFindUser;
 let originalGeminiKey;
+let originalSessionExists;
 let token;
+let aiDataPermission = true;
 
 before(async () => {
   process.env.JWT_SECRET = secret;
   originalGeminiKey = process.env.GEMINI_API_KEY;
   delete process.env.GEMINI_API_KEY;
-  token = jwt.sign({ sub: userId }, secret);
+  token = jwt.sign({ sub: userId, jti: "ai-test-session" }, secret);
   originalFindUser = User.findById;
+  originalSessionExists = Session.exists;
+  Session.exists = async () => ({ _id: "ai-test-session" });
   User.findById = () => ({
     select: async () => ({
       id: userId,
@@ -27,6 +32,7 @@ before(async () => {
       role: "STUDENT",
       accountType: "personal",
       classId: null,
+      aiDataPermission,
       aiAlwaysAllowActions: []
     })
   });
@@ -37,6 +43,7 @@ before(async () => {
 
 after(async () => {
   User.findById = originalFindUser;
+  Session.exists = originalSessionExists;
   if (originalGeminiKey === undefined) delete process.env.GEMINI_API_KEY;
   else process.env.GEMINI_API_KEY = originalGeminiKey;
   await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
@@ -57,6 +64,15 @@ test("AI settings expose only the predefined action allowlist", async () => {
     alwaysAllowActions: [],
     allowedActions: ["add_todo", "move_todo"]
   });
+});
+
+test("AI APIs honor the user's AI data permission", async () => {
+  aiDataPermission = false;
+  const response = await fetch(`${baseUrl}/api/ai/settings`, {
+    headers: { Cookie: `token=${token}` }
+  });
+  assert.equal(response.status, 403);
+  aiDataPermission = true;
 });
 
 test("AI permissions reject actions outside the predefined allowlist", async () => {

@@ -28,6 +28,12 @@ const aiGenerationLimiter = rateLimit({
   message: { message: "You've reached the AI request limit. Please try again in 15 minutes." }
 });
 router.use(requireAuth);
+router.use((req, res, next) => {
+  if (req.user.aiDataPermission === false) {
+    return res.status(403).json({ message: "Enable AI data processing in Settings before using AI features." });
+  }
+  return next();
+});
 
 async function runAI(res, next, callback) {
   try {

@@ -14,11 +14,13 @@ export default function AuthPage({ mode }) {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
 
   async function handleSubmit(event) {
     event.preventDefault();
     setError("");
+    setNotice("");
     if (isRegister && password !== confirmPassword) {
       setError("Your passwords don’t match.");
       return;
@@ -26,12 +28,36 @@ export default function AuthPage({ mode }) {
 
     setBusy(true);
     try {
-      const { user } = await api(`/auth/${isRegister ? "register" : "login"}`, {
+      const result = await api(`/auth/${isRegister ? "register" : "login"}`, {
         method: "POST",
         body: JSON.stringify({ email, password })
       });
+      if (isRegister) {
+        setNotice(result.message);
+        setPassword("");
+        setConfirmPassword("");
+        return;
+      }
+      const { user } = result;
+      if (user.timezone) localStorage.setItem("daymark-timezone", user.timezone);
       setUser(user);
       navigate(user.role === "SUPER_ADMIN" ? "/admin" : user.role === "TEACHER_ADMIN" ? "/teacher" : user.setupComplete ? "/dashboard" : "/onboarding", { replace: true });
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function resendVerification() {
+    setBusy(true);
+    setError("");
+    try {
+      const result = await api("/auth/resend-verification", {
+        method: "POST",
+        body: JSON.stringify({ email })
+      });
+      setNotice(result.message);
     } catch (requestError) {
       setError(requestError.message);
     } finally {
@@ -110,11 +136,16 @@ export default function AuthPage({ mode }) {
             </>
           )}
           {error && <p className="form-error" role="alert">{error}</p>}
+          {notice && <p className="form-success" role="status">{notice}</p>}
           <button className="primary-button auth-submit" disabled={busy} type="submit">
             {busy ? "Please wait…" : isRegister ? "Create account" : "Log in"}
             {!busy && <ArrowRight size={17} />}
           </button>
         </form>
+        {!isRegister && <p className="auth-switch"><Link to="/forgot-password">Forgot your password?</Link></p>}
+        {!isRegister && error.includes("Verify your email") && (
+          <button className="text-button" disabled={busy || !email} onClick={resendVerification} type="button">Resend verification email</button>
+        )}
         <p className="auth-switch">
           {isRegister ? "Already have an account?" : "New to Daymark?"}{" "}
           <Link to={isRegister ? "/login" : "/register"}>

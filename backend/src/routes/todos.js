@@ -59,6 +59,25 @@ const updateTodoSchema = z.object({
 
 router.use(requireAuth);
 
+router.get("/reminders/due", async (req, res, next) => {
+  try {
+    if (!req.user.notificationPreferences?.browser || req.user.reminderMinutes < 1) {
+      return res.json({ todos: [] });
+    }
+    const now = new Date();
+    const dueBefore = new Date(now.getTime() + req.user.reminderMinutes * 60_000);
+    const todos = await Todo.find({
+      userId: req.user.id,
+      deletedAt: null,
+      status: "pending",
+      dueDate: { $gt: now, $lte: dueBefore }
+    }).select("_id title dueDate").sort({ dueDate: 1 }).limit(50).lean();
+    return res.json({ todos });
+  } catch (error) {
+    return next(error);
+  }
+});
+
 router.get("/", async (req, res, next) => {
   try {
     const pageValue = Number(req.query.page ?? 1);

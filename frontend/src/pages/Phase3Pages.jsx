@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import { api } from "../lib/api.js";
+import { formatUserDate, formatUserDateTime } from "../lib/date.js";
 import WorkspaceLayout from "../components/WorkspaceLayout.jsx";
 
 const DailyReportChart = lazy(() => import("../components/DailyReportChart.jsx"));
@@ -147,7 +148,7 @@ export function CalendarPage() {
         </div>
       </section>
       <section className="phase-card">
-        <h2>Todos for {new Date(`${selectedDate}T00:00:00`).toLocaleDateString()}</h2>
+        <h2>Todos for {formatUserDate(`${selectedDate}T00:00:00`)}</h2>
         {todos.map((todo) => (
           <article className="phase-row calendar-todo" key={todo._id}>
             <div><strong>{todo.title}</strong><span className="phase-subline">{todo.status} · {todo.priority}</span></div>
@@ -208,7 +209,7 @@ export function PriorityMatrixPage() {
             }).map((todo) => (
               <article className="matrix-todo" key={todo._id}>
                 <strong>{todo.title}</strong>
-                <span>{new Date(todo.dueDate).toLocaleDateString()} · {todo.status}</span>
+                <span>{formatUserDate(todo.dueDate)} · {todo.status}</span>
                 {todo.description && <p>{todo.description}</p>}
               </article>
             ))}
@@ -285,7 +286,7 @@ export function TrashPage() {
         <p>Deleted todos stay here until you restore or permanently delete them.</p>
         {todos.map((todo) => (
           <article className="phase-row trash-row" key={todo._id}>
-            <div><strong>{todo.title}</strong><span className="phase-subline">Deleted {new Date(todo.deletedAt).toLocaleString()}</span></div>
+            <div><strong>{todo.title}</strong><span className="phase-subline">Deleted {formatUserDateTime(todo.deletedAt)}</span></div>
             <div className="phase3-actions"><button className="text-button" onClick={() => restore(todo)} type="button">Restore</button><button className="text-button danger-text" onClick={() => permanentlyDelete(todo)} type="button">Delete forever</button></div>
           </article>
         ))}
@@ -309,7 +310,7 @@ export function TeacherAuditPage() {
         <p>Edits, status changes, and deletions you make to your class’s todos are recorded here.</p>
         {entries.map((entry) => (
           <article className="phase-row audit-row" key={entry._id}>
-            <div><strong>{entry.action.replaceAll("_", " ")}</strong><span className="phase-subline">Todo {entry.todoId} · {new Date(entry.createdAt).toLocaleString()}</span>
+            <div><strong>{entry.action.replaceAll("_", " ")}</strong><span className="phase-subline">Todo {entry.todoId} · {formatUserDateTime(entry.createdAt)}</span>
               {entry.changes.map((change, index) => <span className="phase-subline" key={`${change.field}-${index}`}>{change.field}: {String(change.oldValue ?? "—")} → {String(change.newValue ?? "—")}</span>)}
             </div>
           </article>
